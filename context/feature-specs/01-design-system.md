@@ -2,9 +2,9 @@ Read `AGENTS.md` before starting.
 
 We're adding the design system and UI primitive components.
 
-Install and configure `shadcn/ui`.
+Install and configure `matos-ui`.
 
-Add these shadcn components:
+Add these matos-ui components:
 
 - Button
 - Card
@@ -13,6 +13,10 @@ Add these shadcn components:
 - Tabs
 - Textarea
 - ScrollArea
+
+matos-ui publishes these as `button`, `input`, `textarea`, `spotlight-card`
+(its Card), `stacked-dialog` (its Dialog) and `motion-tabs` (its Tabs). It has
+no `scroll-area` item, so ScrollArea comes from the shadcn/ui registry.
 
 Do not modify the generated `components/ui/*` files after installation.
 
