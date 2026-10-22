@@ -1,4 +1,4 @@
-# Shadowmesh
+# Ghost AI
 
 ## Overview
 
