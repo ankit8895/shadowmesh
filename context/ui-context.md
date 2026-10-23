@@ -129,6 +129,44 @@ matos-ui surfaces lift along an eight-step ladder instead of using a single card
 - Modals and dialogs: centered overlay, `rounded-3xl`, dark background with backdrop blur.
 - Navbar: top bar with dark background and bottom border.
 
+## Dialog Pattern
+
+No concrete dialogs are built yet. When one is needed, compose it from
+`StackedDialog` and the project tokens instead of styling a new overlay, so every
+dialog inherits the dark palette and the elevation ladder.
+
+- `StackedDialog` owns open state. `StackedDialogTrigger` and `StackedDialogClose`
+  use Base UI's `render` prop to wrap a matos-ui `Button`.
+- `StackedDialogContent` supplies the backdrop, the elevated surface
+  (`bg-surface-N` + `shadow-surface-N` at offset 4), the entrance/exit motion and
+  the top-right close button. Do not put a `bg-*` surface behind it.
+- `StackedDialogHeader` holds `StackedDialogTitle` and `StackedDialogDescription`.
+  The title uses `text-foreground`, the description `text-muted-foreground`.
+- `StackedDialogFooter` holds the actions, right-aligned: cancel/secondary first,
+  the primary action last. A destructive confirmation uses `variant="destructive"`
+  on the action and `variant="danger"` on `StackedDialogContent`.
+
+```tsx
+<StackedDialog>
+  <StackedDialogTrigger render={<Button>New Project</Button>} />
+  <StackedDialogContent>
+    <StackedDialogHeader>
+      <StackedDialogTitle>New Project</StackedDialogTitle>
+      <StackedDialogDescription>
+        Give your system a name to get started.
+      </StackedDialogDescription>
+    </StackedDialogHeader>
+
+    {/* form fields */}
+
+    <StackedDialogFooter>
+      <StackedDialogClose render={<Button variant="secondary">Cancel</Button>} />
+      <Button>Create project</Button>
+    </StackedDialogFooter>
+  </StackedDialogContent>
+</StackedDialog>
+```
+
 ## Icons
 
 Lucide React. Stroke-based icons only — no filled variants. Icon sizes: `h-4 w-4` for inline, `h-5 w-5` for buttons, `h-8 w-8` for feature icons in empty states.

@@ -6,10 +6,11 @@ change.
 ## Current Phase
 
 - Complete — Feature 01: Design System
+- Complete — Feature 02: Editor Chrome
 
 ## Current Goal
 
-- Feature 02 is not specified yet.
+- Feature 03 is not specified yet.
 
 ## Completed
 
@@ -30,6 +31,21 @@ change.
   - Dark theme in `app/globals.css`: palette tokens, shadcn semantic tokens,
     `color-scheme: dark`, typography, `hover-lift`, and the eight-step
     elevation ladder (`--surface-1..8`, `--shadow-1..8`).
+- Feature 02: Editor Chrome (`context/feature-specs/02-editor.md`).
+  - `components/editor/editor-navbar.tsx`: fixed-height top bar with left,
+    center and right sections; the left section holds the sidebar toggle
+    (`PanelLeftOpen` when closed, `PanelLeftClose` when open) with
+    `aria-expanded` / `aria-controls` wiring. The right section is empty.
+  - `components/editor/project-sidebar.tsx`: floating overlay fixed below the
+    navbar (`fixed`, `z-30`, `w-80`, dark translucent surface). Accepts
+    `isOpen` / `onClose`, slides in from the left with the `moderate` spring
+    (opacity-only under reduced motion), and does not push page content.
+  - Sidebar header is `Projects` with a close button; `MotionTabs` (`size="sm"`)
+    provides `My Projects` / `Shared`, both rendering an empty placeholder; the
+    footer holds a full-width `New Project` button with a `Plus` icon.
+  - Dialog pattern documented in `context/ui-context.md` (`StackedDialog`
+    composition for title, description and footer actions). No dialog instances
+    were built, per the spec.
 
 ## In Progress
 
@@ -37,17 +53,17 @@ change.
 
 ## Next Up
 
-- Feature 02 (not yet specified).
+- Feature 03 (not yet specified).
 
 ## Open Questions
 
-- None blocking. matos-ui publishes no `card`, `dialog`, `tabs` or
-  `scroll-area` item under those names; its equivalents are `spotlight-card`,
-  `stacked-dialog` and `motion-tabs`, and `scroll-area` still comes from
-  shadcn/ui.
+- None yet.
 
 ## Architecture Decisions
 
+- Editor chrome is presentational: `EditorNavbar` and `ProjectSidebar` receive
+  sidebar state through props (`isSidebarOpen` / `onToggleSidebar` and
+  `isOpen` / `onClose`). No editor route or shell owns that state yet.
 - Design system foundation is matos-ui (source-first shadcn registry) on top of
   Tailwind CSS v4.
 - Card = `SpotlightCard`, dialog = `StackedDialog`, tabs = `MotionTabs`. These
@@ -68,7 +84,17 @@ change.
 
 ## Session Notes
 
-- Latest change (card / dialog / tabs swap):
+- Latest change (Feature 02 — editor chrome):
+  - Added `components/editor/editor-navbar.tsx` and
+    `components/editor/project-sidebar.tsx`.
+  - Verified on a temporary `/editor-check` harness with headless Chrome and the
+    DevTools protocol: 23 checks covering initial closed state, icon and ARIA
+    swap on toggle, fixed navbar height/background/border, sidebar overlay
+    positioning above the canvas, both tab empty states, full-width New Project
+    button, and close-button behaviour. All passed; the harness was deleted.
+  - `npx tsc --noEmit` passes. `npm run lint` still reports only the pre-existing
+    `react-hooks/set-state-in-effect` error in `lib/motion-tokens.ts`.
+- Previous change (card / dialog / tabs swap):
   - Added `components/matos-ui/spotlight-card.tsx`, `stacked-dialog.tsx`,
     `motion-tabs.tsx`, `elevated.tsx`, plus `lib/surface-context.tsx` and
     `lib/surface-classes.ts`.
@@ -83,8 +109,7 @@ change.
   - Verified by rendering all three components on a temporary `/design-check`
     route: SSR HTML contained `spotlight-card`, `motion-tabs` (list, trigger,
     indicator, panel) and, after hydration in headless Chrome, the portalled
-    `stacked-dialog` at surface 5, tabs surface 2 and indicator/panel surface
-    3. The route was deleted afterwards.
+    `stacked-dialog` at surface 5, tabs surface 2 and indicator/panel surface 3. The route was deleted afterwards.
   - `components/ui/field.tsx`, `label.tsx` and `separator.tsx` are also unused
     leftovers from the initial install; they are not imported anywhere.
 - `npm run lint` still reports one error —
