@@ -1,6 +1,7 @@
 "use client";
 
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { UserButton } from "@clerk/nextjs";
+import { PanelLeftCloseIcon, PanelLeftOpenIcon } from "lucide-animated";
 
 import { Button } from "@/components/matos-ui/button";
 
@@ -31,16 +32,18 @@ export function EditorNavbar({
           onClick={onToggleSidebar}
         >
           {isSidebarOpen ? (
-            <PanelLeftClose className="size-5" aria-hidden="true" />
+            <PanelLeftCloseIcon className="size-5" aria-hidden="true" />
           ) : (
-            <PanelLeftOpen className="size-5" aria-hidden="true" />
+            <PanelLeftOpenIcon className="size-5" aria-hidden="true" />
           )}
         </Button>
       </div>
 
       <div className="flex flex-1 items-center justify-center" />
 
-      <div className="flex flex-1 items-center justify-end" />
+      <div className="flex flex-1 items-center justify-end">
+        <UserButton />
+      </div>
     </header>
   );
 }

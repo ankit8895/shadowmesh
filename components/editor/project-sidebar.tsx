@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { FolderOpen, Plus, X } from "lucide-react";
+import { FolderOpenIcon, PlusIcon, XIcon } from "lucide-animated";
 
 import { Button } from "@/components/matos-ui/button";
 import { MotionTabs } from "@/components/matos-ui/motion-tabs";
@@ -26,7 +26,7 @@ interface ProjectsEmptyStateProps {
 function ProjectsEmptyState({ title, description }: ProjectsEmptyStateProps) {
   return (
     <div className="flex min-h-40 flex-col items-center justify-center gap-2 text-center">
-      <FolderOpen className="size-8 text-copy-faint" aria-hidden="true" />
+      <FolderOpenIcon className="size-8 text-copy-faint" aria-hidden="true" />
       <p className="text-sm font-medium text-copy-secondary">{title}</p>
       <p className="max-w-56 text-xs leading-relaxed text-copy-muted">
         {description}
@@ -64,7 +64,7 @@ export function ProjectSidebar({ isOpen, onClose }: ProjectSidebarProps) {
               aria-label="Close projects sidebar"
               onClick={onClose}
             >
-              <X className="size-4" aria-hidden="true" />
+              <XIcon className="size-4" aria-hidden="true" />
             </Button>
           </div>
 
@@ -99,7 +99,7 @@ export function ProjectSidebar({ isOpen, onClose }: ProjectSidebarProps) {
 
           <div className="shrink-0 border-t border-surface-border p-3">
             <Button type="button" className="w-full">
-              <Plus className="size-4" aria-hidden="true" />
+              <PlusIcon className="size-4" aria-hidden="true" />
               New Project
             </Button>
           </div>
