@@ -3,7 +3,7 @@
 import { Input as InputPrimitive } from "@base-ui/react/input";
 import { cva, type VariantProps } from "class-variance-authority";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { Check, LoaderCircle } from "lucide-react";
+import { CheckIcon, LoaderCircleIcon } from "lucide-animated";
 import { type ComponentProps, type ReactNode, useId } from "react";
 
 import { cn } from "@/lib/utils";
@@ -164,9 +164,9 @@ export function InputField({
             >
               {trailing ??
                 (resolvedState === "loading" ? (
-                  <LoaderCircle className="size-4 animate-spin" />
+                  <LoaderCircleIcon className="size-4 animate-spin" />
                 ) : (
-                  <Check className="size-4 text-foreground" />
+                  <CheckIcon className="size-4 text-foreground" />
                 ))}
             </motion.span>
           ) : null}

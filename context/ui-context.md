@@ -20,6 +20,7 @@ All colors are defined as CSS custom properties in `globals.css` and mapped to T
 | Faint text       | `--text-faint`         | `#505060`                 |
 | Brand accent     | `--accent-primary`     | `#00c8d4` (cyan)          |
 | Brand dim        | `--accent-primary-dim` | `rgba(0, 200, 212, 0.12)` |
+| Teal panel       | `--teal-dark`          | `#0b1315` (auth left panel) |
 | AI accent        | `--accent-ai`          | `#6457f9` (indigo-purple) |
 | AI text          | `--accent-ai-text`     | `#8b82ff`                 |
 | Error            | `--state-error`        | `#ff4d4f`                 |
@@ -30,12 +31,12 @@ Tailwind utility names map to these variables. Use `bg-base`, `bg-surface`, `tex
 
 ## Typography
 
-| Role      | Font       | CSS Variable        |
-| --------- | ---------- | ------------------- |
-| UI text   | Geist Sans | `--font-geist-sans` |
-| Code/mono | Geist Mono | `--font-geist-mono` |
+| Role      | Font       | CSS Variable          |
+| --------- | ---------- | --------------------- |
+| UI text   | Montserrat | `--font-montserrat`   |
+| Code/mono | Montserrat | `--font-montserrat`   |
 
-Both fonts are loaded via `next/font/google` and applied as CSS variables on the `<html>` element. The base `body` uses Geist Sans with `antialiased`.
+Montserrat is loaded via `next/font/google` and applied as a CSS variable on the `<html>` element. It is the single typeface for the whole project: both `--font-sans` and `--font-mono` map to it in `@theme inline`, and Clerk's appearance in `lib/clerk-appearance.ts` points its font variables at it too. The base `body` uses it with `antialiased`.
 
 ## Border Radius
 
@@ -128,6 +129,7 @@ matos-ui surfaces lift along an eight-step ladder instead of using a single card
 - Sidebars: floating overlay with dark semi-transparent background and subtle border.
 - Modals and dialogs: centered overlay, `rounded-3xl`, dark background with backdrop blur.
 - Navbar: top bar with dark background and bottom border.
+- Auth pages: 50/50 split on `lg` — teal-tinted left panel (`bg-teal-dark`) holding the compact logo, headline, description and an icon-chip feature list, against the near-black `bg-base` right panel with the centered Clerk form. The left panel is hidden below `lg`. Clerk's `dark` theme is themed through `lib/clerk-appearance.ts`, which maps app CSS variables; no literal colors are passed.
 
 ## Dialog Pattern
 

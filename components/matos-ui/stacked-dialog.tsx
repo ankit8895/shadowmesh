@@ -3,7 +3,7 @@
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { cva, type VariantProps } from "class-variance-authority";
 import { motion, useReducedMotion } from "framer-motion";
-import { X } from "lucide-react";
+import { XIcon } from "lucide-animated";
 import {
   type ComponentProps,
   type CSSProperties,
@@ -266,7 +266,7 @@ export function StackedDialogContent({
                 "transition-colors duration-150 hover:bg-muted/70 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
               )}
             >
-              <X className="size-4" aria-hidden="true" />
+              <XIcon className="size-4" aria-hidden="true" />
             </DialogPrimitive.Close>
           ) : null}
         </DialogPrimitive.Popup>

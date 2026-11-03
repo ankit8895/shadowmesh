@@ -6,7 +6,7 @@ import {
   motion,
   useReducedMotion,
 } from "framer-motion";
-import { AlertCircle, CheckCircle2 } from "lucide-react";
+import { BadgeAlertIcon, CheckCheckIcon } from "lucide-animated";
 import type { ComponentProps, ReactNode } from "react";
 import { twMerge } from "tailwind-merge";
 import { tv, type VariantProps } from "tailwind-variants";
@@ -183,11 +183,7 @@ export function FieldError({
           )}
           {...props}
         >
-          {showIcon ? (
-            <AlertCircle
-              className="mt-px size-3.5 shrink-0"
-              aria-hidden="true"
-            />
+          {showIcon ? (<BadgeAlertIcon className="mt-px size-3.5 shrink-0" aria-hidden="true" />
           ) : null}
           <span>{message}</span>
         </motion.p>
@@ -230,11 +226,7 @@ export function FieldSuccess({
           )}
           {...props}
         >
-          {showIcon ? (
-            <CheckCircle2
-              className="mt-px size-3.5 shrink-0"
-              aria-hidden="true"
-            />
+          {showIcon ? (<CheckCheckIcon className="mt-px size-3.5 shrink-0" aria-hidden="true" />
           ) : null}
           <span>{children}</span>
         </motion.p>
