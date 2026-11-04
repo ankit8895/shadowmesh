@@ -168,7 +168,7 @@ export function FieldError({
   return (
     <AnimatePresence initial={false}>
       {message ? (
-        <motion.p
+        <motion.div
           data-slot="field-error"
           role="alert"
           variants={shouldReduceMotion ? feedbackReduced : feedbackVariants}
@@ -183,10 +183,11 @@ export function FieldError({
           )}
           {...props}
         >
-          {showIcon ? (<BadgeAlertIcon className="mt-px size-3.5 shrink-0" aria-hidden="true" />
+          {showIcon ? (
+            <BadgeAlertIcon size={14} className="mt-px shrink-0" aria-hidden="true" />
           ) : null}
           <span>{message}</span>
-        </motion.p>
+        </motion.div>
       ) : null}
     </AnimatePresence>
   );
@@ -212,7 +213,7 @@ export function FieldSuccess({
   return (
     <AnimatePresence initial={false}>
       {children ? (
-        <motion.p
+        <motion.div
           data-slot="field-success"
           variants={shouldReduceMotion ? feedbackReduced : feedbackVariants}
           initial="hidden"
@@ -226,10 +227,11 @@ export function FieldSuccess({
           )}
           {...props}
         >
-          {showIcon ? (<CheckCheckIcon className="mt-px size-3.5 shrink-0" aria-hidden="true" />
+          {showIcon ? (
+            <CheckCheckIcon size={14} className="mt-px shrink-0" aria-hidden="true" />
           ) : null}
           <span>{children}</span>
-        </motion.p>
+        </motion.div>
       ) : null}
     </AnimatePresence>
   );

@@ -32,9 +32,9 @@ export function EditorNavbar({
           onClick={onToggleSidebar}
         >
           {isSidebarOpen ? (
-            <PanelLeftCloseIcon className="size-5" aria-hidden="true" />
+            <PanelLeftCloseIcon size={20} aria-hidden="true" />
           ) : (
-            <PanelLeftOpenIcon className="size-5" aria-hidden="true" />
+            <PanelLeftOpenIcon size={20} aria-hidden="true" />
           )}
         </Button>
       </div>

@@ -125,7 +125,7 @@ matos-ui surfaces lift along an eight-step ladder instead of using a single card
 
 ## Layout Patterns
 
-- Editor workspace: full-viewport layout — floating sidebar overlay on the left, center canvas, slide-over AI sidebar on the right.
+- Editor workspace: full-viewport layout — floating sidebar overlay on the left, center canvas, slide-over AI sidebar on the right. The `/editor` home state centers a minimal column (heading, one-line description, primary button) inside the canvas area — no card wrapper. Below `lg`, an open sidebar renders a backdrop scrim that closes it when tapped.
 - Sidebars: floating overlay with dark semi-transparent background and subtle border.
 - Modals and dialogs: centered overlay, `rounded-3xl`, dark background with backdrop blur.
 - Navbar: top bar with dark background and bottom border.
@@ -133,15 +133,30 @@ matos-ui surfaces lift along an eight-step ladder instead of using a single card
 
 ## Dialog Pattern
 
-No concrete dialogs are built yet. When one is needed, compose it from
-`StackedDialog` and the project tokens instead of styling a new overlay, so every
-dialog inherits the dark palette and the elevation ladder.
+Project dialogs live in `components/editor/` and are all built on
+`StackedDialog`: `create-project-dialog` (name input plus live slug preview),
+`rename-project-dialog` (prefilled, auto-focused input; Enter submits via the
+form) and `delete-project-dialog` (confirmation only, no input, destructive
+styling). Their open state, form value and loading state come from
+`lib/use-project-dialogs.ts`; the dialogs themselves stay presentational and
+receive `open` plus callbacks. When a new dialog is needed, compose it the same
+way so it inherits the dark palette and the elevation ladder.
+
+Create and rename both validate the slug: a name of only symbols slugifies to
+`""`, so the field shows `Use at least one letter or number in the project name.`
+and the submit button stays disabled. `useProjectDialogs.submit` repeats the
+check so no caller can create a project with an empty slug.
 
 - `StackedDialog` owns open state. `StackedDialogTrigger` and `StackedDialogClose`
   use Base UI's `render` prop to wrap a matos-ui `Button`.
 - `StackedDialogContent` supplies the backdrop, the elevated surface
   (`bg-surface-N` + `shadow-surface-N` at offset 4), the entrance/exit motion and
   the top-right close button. Do not put a `bg-*` surface behind it.
+- Backdrop and popup are both animated with framer from the same `open` flag, and
+  the portal is `keepMounted` so the JS exit can finish before it unmounts.
+  Do not add CSS enter/exit animation classes to the backdrop: Base UI ends the
+  portal when the popup's CSS animations finish, which leaves a CSS-driven
+  backdrop painted after the popup is gone (a full-screen black flash on close).
 - `StackedDialogHeader` holds `StackedDialogTitle` and `StackedDialogDescription`.
   The title uses `text-foreground`, the description `text-muted-foreground`.
 - `StackedDialogFooter` holds the actions, right-aligned: cancel/secondary first,
@@ -171,4 +186,9 @@ dialog inherits the dark palette and the elevation ladder.
 
 ## Icons
 
-Lucide React. Stroke-based icons only — no filled variants. Icon sizes: `h-4 w-4` for inline, `h-5 w-5` for buttons, `h-8 w-8` for feature icons in empty states.
+`lucide-animated` (`XIcon`, `PlusIcon`, …). Stroke-based icons only — no filled
+variants. These components render a wrapper `<div>` whose inner `<svg>` is sized
+by the `size` prop, so size them with `size={n}` — `16` inline and in inputs,
+`20` in icon buttons, `32` in empty-state art. A `size-*` class only shrinks the
+wrapper and lets the default 28px SVG overflow, which reads as an off-center
+glyph. Icons also render a `<div>`, so never place one inside a `<p>`.

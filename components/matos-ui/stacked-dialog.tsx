@@ -19,6 +19,7 @@ import {
 
 import { cn } from "@/lib/utils";
 import {
+  ease,
   motionForOffset,
   type SpringTier,
   spring,
@@ -141,10 +142,13 @@ export function StackedDialogClose(props: StackedDialogCloseProps) {
   return <DialogPrimitive.Close data-slot="stacked-dialog-close" {...props} />;
 }
 
+// The backdrop's opacity is driven by framer below, in lockstep with the popup.
+// It deliberately carries no CSS enter/exit animation: Base UI ends the portal's
+// lifetime when the popup's CSS animations finish, and mixing a CSS-driven
+// backdrop with a JS-driven popup leaves the black scrim painted after the
+// dialog has gone.
 const stackedDialogBackdropVariants = cva([
   "not-prose fixed inset-0 z-40 bg-black/45 backdrop-blur-[2px]",
-  "data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0",
-  "duration-[var(--stacked-dialog-duration)] data-ending-style:duration-[var(--stacked-dialog-exit-duration)]",
   "motion-reduce:transition-none",
 ]);
 
@@ -227,6 +231,19 @@ export function StackedDialogContent({
   const visible = shouldReduceMotion
     ? { opacity: 1 }
     : { opacity: 1, scale: 1, y: 0 };
+  // Entrance springs; exit runs on the tier's exit duration, which is what
+  // `exitFallbackMs` budgets for. A spring's settling tail would outlast the
+  // fallback timer and get cut off mid-flight.
+  const transition = shouldReduceMotion
+    ? { duration: 0 }
+    : open
+      ? tier
+      : tier.exit;
+  const backdropTransition = shouldReduceMotion
+    ? { duration: 0 }
+    : open
+      ? { duration: tier.visualDuration, ease: ease.standard }
+      : tier.exit;
 
   if (!mounted) {
     return null;
@@ -234,21 +251,34 @@ export function StackedDialogContent({
 
   return (
     <StackedDialogVariantContext.Provider value={variant ?? "default"}>
-      <DialogPrimitive.Portal>
+      {/* keepMounted keeps Base UI's portal alive through the JS exit; this
+          component still owns the real mount via `useExitAnimation`. `hidden`
+          is overridden because Base UI marks both parts hidden the moment
+          `open` goes false, which would hide them before the exit plays. */}
+      <DialogPrimitive.Portal keepMounted>
         <DialogPrimitive.Backdrop
           data-slot="stacked-dialog-backdrop"
+          hidden={false}
+          render={
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: open ? 1 : 0 }}
+              transition={backdropTransition}
+            />
+          }
           className={cn(stackedDialogBackdropVariants(), backdropClassName)}
           style={motionStyle}
         />
         <DialogPrimitive.Popup
           data-slot="stacked-dialog-content"
           data-variant={variant}
+          hidden={false}
           render={
             <MotionElevated
               offset={STACKED_DIALOG_OFFSET}
               initial={hidden}
               animate={open ? visible : hidden}
-              transition={shouldReduceMotion ? { duration: 0 } : tier}
+              transition={transition}
               onAnimationComplete={onAnimationComplete}
             />
           }
@@ -266,7 +296,9 @@ export function StackedDialogContent({
                 "transition-colors duration-150 hover:bg-muted/70 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
               )}
             >
-              <XIcon className="size-4" aria-hidden="true" />
+              {/* lucide-animated icons size the inner <svg> through `size`;
+                  a className alone leaves the 28px default overflowing. */}
+              <XIcon size={16} aria-hidden="true" />
             </DialogPrimitive.Close>
           ) : null}
         </DialogPrimitive.Popup>
