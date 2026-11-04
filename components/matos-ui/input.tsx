@@ -164,9 +164,9 @@ export function InputField({
             >
               {trailing ??
                 (resolvedState === "loading" ? (
-                  <LoaderCircleIcon className="size-4 animate-spin" />
+                  <LoaderCircleIcon size={16} className="animate-spin" />
                 ) : (
-                  <CheckIcon className="size-4 text-foreground" />
+                  <CheckIcon size={16} className="text-foreground" />
                 ))}
             </motion.span>
           ) : null}

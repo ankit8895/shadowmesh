@@ -8,6 +8,7 @@ change.
 - Complete — Feature 01: Design System
 - Complete — Feature 02: Editor Chrome
 - Complete — Feature 03: Auth
+- Complete — Feature 04: Project Dialogs
 - Replace `lucide-react` with `lucide-animated` across the entire project.
   All icon imports updated to use `lucide-animated` names (with `Icon` suffix).
 - UI updated to match the 50/50 split-screen sign-in layout: teal-tinted left
@@ -29,7 +30,7 @@ change.
 
 ## Current Goal
 
-- Feature 04 is not specified yet.
+- Feature 05 is not specified yet.
 
 ## Completed
 
@@ -91,6 +92,29 @@ change.
     default menu and profile flows untouched.
   - `app/loading.tsx`: root fallback required because `/` and `/editor` read
     request auth under Cache Components.
+- Feature 04: Project Dialogs (`context/feature-specs/04-project-dialogs.md`).
+  - `lib/mock-projects.ts`: `Project` type plus `MOCK_PROJECTS` (two owned
+    projects and one shared project). No API calls or persistence.
+  - `lib/project-slug.ts`: `toProjectSlug()` derives the slug preview.
+  - `lib/use-project-dialogs.ts`: dedicated hook owning dialog state, form
+    state (`name`, derived `slug`), the active project, and `isSubmitting`.
+    Submits run on a short mock timer and mutate the local project list.
+  - `components/editor/editor-home.tsx`: minimal centered home content (heading,
+    description, `New Project` button) with no card wrapper.
+  - `components/editor/create-project-dialog.tsx`: name input plus a live slug
+    preview that updates as the user types.
+  - `components/editor/rename-project-dialog.tsx`: prefilled, auto-focused name
+    input, current name in the description, Enter submits through the form.
+  - `components/editor/delete-project-dialog.tsx`: destructive confirmation with
+    no input; content uses `variant="danger"` and the confirm button
+    `variant="destructive"`.
+  - `components/editor/project-list.tsx`: mock project rows; rename and delete
+    actions render only for `isOwner` projects, so the Shared tab has none.
+  - `components/editor/project-sidebar.tsx`: renders the owned and shared lists
+    in their tabs, wires `New Project`, and adds a mobile-only backdrop scrim
+    (`lg:hidden`) that closes the sidebar when tapped.
+  - `components/editor/editor-shell.tsx`: owns sidebar state and the dialogs
+    hook, and wires home create, sidebar create, rename and delete.
 
 ## In Progress
 
@@ -98,7 +122,7 @@ change.
 
 ## Next Up
 
-- Feature 04 (not yet specified).
+- Feature 05 (not yet specified).
 
 ## Open Questions
 
@@ -135,6 +159,52 @@ change.
 
 ## Session Notes
 
+- Entry 2026-11-04 (dialog close flicker, icon alignment, slug validation):
+  - Close flicker: Base UI ends the portal as soon as the *popup's CSS*
+    animations finish, so the framer exit never played while the backdrop's CSS
+    `exit` animation ran on its own — the black scrim outlived the content and
+    read as a black flash. `StackedDialogContent` now renders the portal with
+    `keepMounted`, overrides Base UI's `hidden` on popup and backdrop, and drives
+    both with framer from the same `open` flag (backdrop fades with the popup).
+    Exits use `tier.exit` so they finish inside `exitFallbackMs` instead of being
+    cut off by the spring tail.
+  - Verified in headless Chrome with a temporary public probe route (removed
+    again, `proxy.ts` restored): a per-frame DOM sampler shows backdrop and popup
+    opacity tracking each other from 1 → 0 over ~360ms and unmounting together.
+  - Close-button `XIcon` used `className="size-4"`, which sized the wrapper `div`
+    to 16px while the SVG stayed at its 28px default — the glyph sat off-center.
+    All remaining class-sized `lucide-animated` icons now use the `size` prop
+    (`stacked-dialog`, `input` status icons, `editor-navbar`, `project-list`).
+    Measured after the fix: a 16px SVG centered in the 32px button.
+  - `FieldError` / `FieldSuccess` rendered a `motion.p` containing the icon's
+    wrapper `div` (invalid nesting, React hydration error) with the same class
+    sizing; both are now `motion.div` with `size={14}` icons.
+  - Empty-slug validation: create and rename show
+    `Use at least one letter or number in the project name.` and disable submit
+    when the name trims to something that slugifies to `""`;
+    `useProjectDialogs.submit` guards the same case. `rename-project-dialog`
+    takes a `slug` prop.
+  - `npx tsc --noEmit`, `npx eslint` on the touched files and
+    `NODE_ENV=production npx next build` all pass.
+- Entry 2026-11-03 (Feature 04 — project dialogs):
+  - Added `lib/mock-projects.ts`, `lib/project-slug.ts`,
+    `lib/use-project-dialogs.ts`, `components/editor/editor-home.tsx`,
+    `components/editor/project-list.tsx` and the create / rename / delete dialog
+    components; updated `components/editor/project-sidebar.tsx` and
+    `components/editor/editor-shell.tsx`. Navbar and sidebar open/close
+    behaviour are unchanged.
+  - Dialog state is centralized in `useProjectDialogs`; the shell only maps
+    `openDialog` to each dialog and forwards `closeDialog` from `onOpenChange`.
+  - `lucide-animated` exposes no `Pencil` / `Trash2`, so the rename and delete
+    actions use `SquarePenIcon` and `DeleteIcon` with the icon `size` prop.
+  - `npx tsc --noEmit` passes; `NODE_ENV=production npm run build` passes.
+  - `npx eslint components/editor lib/use-project-dialogs.ts lib/mock-projects.ts
+    lib/project-slug.ts` is clean. `npm run lint` still reports the pre-existing
+    `react-hooks/set-state-in-effect` error in the protected generated
+    `lib/motion-tokens.ts` (`useExitAnimation`); it was not edited.
+  - `toProjectSlug` verified against five inputs (spacing, punctuation,
+    accents, all-symbol names, casing) by compiling the module and running it
+    under Node.
 - Entry 2026-11-03 (auth polish):
   - Auth logo mark uses `BoxesIcon` from `lucide-animated` again (cyan circle,
     cyan-on-dark icon) instead of a text letter.
