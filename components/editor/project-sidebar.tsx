@@ -2,21 +2,21 @@
 
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { PlusIcon, XIcon } from "lucide-animated";
-import { useMemo } from "react";
 
 import { Button } from "@/components/matos-ui/button";
 import { MotionTabs } from "@/components/matos-ui/motion-tabs";
 import { ProjectList } from "@/components/editor/project-list";
-import type { Project } from "@/lib/mock-projects";
 import { spring, withReducedMotion } from "@/lib/motion-tokens";
+import type { ProjectSummary } from "@/lib/project-types";
 
 export interface ProjectSidebarProps {
   isOpen: boolean;
   onClose: () => void;
-  projects: Project[];
+  ownedProjects: ProjectSummary[];
+  sharedProjects: ProjectSummary[];
   onCreateProject: () => void;
-  onRenameProject: (project: Project) => void;
-  onDeleteProject: (project: Project) => void;
+  onRenameProject: (project: ProjectSummary) => void;
+  onDeleteProject: (project: ProjectSummary) => void;
 }
 
 const sidebarVariants = {
@@ -34,7 +34,8 @@ const scrimVariants = {
 export function ProjectSidebar({
   isOpen,
   onClose,
-  projects,
+  ownedProjects,
+  sharedProjects,
   onCreateProject,
   onRenameProject,
   onDeleteProject,
@@ -44,15 +45,6 @@ export function ProjectSidebar({
     ? withReducedMotion(sidebarVariants)
     : sidebarVariants;
   const scrim = shouldReduceMotion ? withReducedMotion(scrimVariants) : scrimVariants;
-
-  const ownedProjects = useMemo(
-    () => projects.filter((project) => project.isOwner),
-    [projects],
-  );
-  const sharedProjects = useMemo(
-    () => projects.filter((project) => !project.isOwner),
-    [projects],
-  );
 
   return (
     <AnimatePresence>

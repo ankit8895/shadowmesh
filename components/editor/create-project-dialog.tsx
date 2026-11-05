@@ -10,12 +10,14 @@ import {
   StackedDialogHeader,
   StackedDialogTitle,
 } from "@/components/matos-ui/stacked-dialog";
+import { toProjectSlug } from "@/lib/project-slug";
 
 export interface CreateProjectDialogProps {
   open: boolean;
   name: string;
-  slug: string;
+  roomId: string;
   isSubmitting: boolean;
+  error?: string | null;
   onNameChange: (name: string) => void;
   onOpenChange: (open: boolean) => void;
   onSubmit: () => void;
@@ -24,17 +26,18 @@ export interface CreateProjectDialogProps {
 export function CreateProjectDialog({
   open,
   name,
-  slug,
+  roomId,
   isSubmitting,
+  error,
   onNameChange,
   onOpenChange,
   onSubmit,
 }: CreateProjectDialogProps) {
-  // A name made only of symbols slugifies to an empty string, which would
-  // create a project with no URL-friendly identifier.
+  // The room ID starts with the slug, so a name of only symbols would create a
+  // project with no readable identifier.
   const trimmedName = name.trim();
   const slugError =
-    trimmedName.length > 0 && slug.length === 0
+    trimmedName.length > 0 && toProjectSlug(trimmedName).length === 0
       ? "Use at least one letter or number in the project name."
       : undefined;
 
@@ -67,14 +70,19 @@ export function CreateProjectDialog({
               reserveMessageSpace={false}
             />
             <p
-              data-slot="slug-preview"
+              data-slot="room-id-preview"
               className="truncate text-xs text-copy-muted"
             >
-              Slug:{" "}
+              Room ID:{" "}
               <span className="text-copy-secondary">
-                {slug || "your-project"}
+                {roomId || "your-project-xxxxxx"}
               </span>
             </p>
+            {error ? (
+              <p role="alert" className="text-xs text-error">
+                {error}
+              </p>
+            ) : null}
           </div>
 
           <StackedDialogFooter>

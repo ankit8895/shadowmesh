@@ -15,8 +15,8 @@ export interface RenameProjectDialogProps {
   open: boolean;
   projectName: string;
   name: string;
-  slug: string;
   isSubmitting: boolean;
+  error?: string | null;
   onNameChange: (name: string) => void;
   onOpenChange: (open: boolean) => void;
   onSubmit: () => void;
@@ -26,19 +26,14 @@ export function RenameProjectDialog({
   open,
   projectName,
   name,
-  slug,
   isSubmitting,
+  error,
   onNameChange,
   onOpenChange,
   onSubmit,
 }: RenameProjectDialogProps) {
-  // A name made only of symbols slugifies to an empty string, which would
-  // leave the project without a URL-friendly identifier.
+  // Renaming does not change the room ID, so only a blank name is invalid.
   const trimmedName = name.trim();
-  const slugError =
-    trimmedName.length > 0 && slug.length === 0
-      ? "Use at least one letter or number in the project name."
-      : undefined;
 
   return (
     <StackedDialog open={open} onOpenChange={onOpenChange}>
@@ -57,16 +52,20 @@ export function RenameProjectDialog({
             </StackedDialogDescription>
           </StackedDialogHeader>
 
-          <div className="mt-4">
+          <div className="mt-4 flex flex-col gap-1.5">
             <InputField
               label="Project name"
               value={name}
               onChange={(event) => onNameChange(event.target.value)}
               autoFocus
               required
-              error={slugError}
               reserveMessageSpace={false}
             />
+            {error ? (
+              <p role="alert" className="text-xs text-error">
+                {error}
+              </p>
+            ) : null}
           </div>
 
           <StackedDialogFooter>
@@ -79,7 +78,7 @@ export function RenameProjectDialog({
             </Button>
             <Button
               type="submit"
-              disabled={!trimmedName || Boolean(slugError)}
+              disabled={!trimmedName}
               loading={isSubmitting}
             >
               Save changes

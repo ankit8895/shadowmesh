@@ -134,18 +134,21 @@ matos-ui surfaces lift along an eight-step ladder instead of using a single card
 ## Dialog Pattern
 
 Project dialogs live in `components/editor/` and are all built on
-`StackedDialog`: `create-project-dialog` (name input plus live slug preview),
+`StackedDialog`: `create-project-dialog` (name input plus live room ID preview),
 `rename-project-dialog` (prefilled, auto-focused input; Enter submits via the
 form) and `delete-project-dialog` (confirmation only, no input, destructive
-styling). Their open state, form value and loading state come from
-`lib/use-project-dialogs.ts`; the dialogs themselves stay presentational and
-receive `open` plus callbacks. When a new dialog is needed, compose it the same
-way so it inherits the dark palette and the elevation ladder.
+styling). Their open state, form value, submitting flag and API `error` come
+from `hooks/use-project-actions.ts`; the dialogs themselves stay presentational
+and receive values plus callbacks. When a new dialog is needed, compose it the
+same way so it inherits the dark palette and the elevation ladder.
 
-Create and rename both validate the slug: a name of only symbols slugifies to
-`""`, so the field shows `Use at least one letter or number in the project name.`
-and the submit button stays disabled. `useProjectDialogs.submit` repeats the
-check so no caller can create a project with an empty slug.
+The room ID is the project ID: create slugifies the name and appends a random
+six-character suffix (`payments-platform-k3f9q2`) and previews the result in the
+dialog. Create therefore requires a name with at least one letter or number,
+since a symbols-only name has an empty slug; rename only requires a non-blank
+name because it cannot change the room ID. `useProjectActions.submit` repeats
+the create check, and every dialog renders the API's `{ error }` message when a
+request fails.
 
 - `StackedDialog` owns open state. `StackedDialogTrigger` and `StackedDialogClose`
   use Base UI's `render` prop to wrap a matos-ui `Button`.

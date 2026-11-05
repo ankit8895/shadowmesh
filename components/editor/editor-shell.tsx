@@ -8,15 +8,23 @@ import { EditorHome } from "@/components/editor/editor-home";
 import { EditorNavbar } from "@/components/editor/editor-navbar";
 import { ProjectSidebar } from "@/components/editor/project-sidebar";
 import { RenameProjectDialog } from "@/components/editor/rename-project-dialog";
-import { MOCK_PROJECTS } from "@/lib/mock-projects";
-import { useProjectDialogs } from "@/lib/use-project-dialogs";
+import { useProjectActions } from "@/hooks/use-project-actions";
+import type { ProjectSummary } from "@/lib/project-types";
 
-export function EditorShell() {
+export interface EditorShellProps {
+  ownedProjects: ProjectSummary[];
+  sharedProjects: ProjectSummary[];
+}
+
+export function EditorShell({
+  ownedProjects,
+  sharedProjects,
+}: EditorShellProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const dialogs = useProjectDialogs(MOCK_PROJECTS);
+  const actions = useProjectActions();
 
   const handleOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen) dialogs.closeDialog();
+    if (!nextOpen) actions.closeDialog();
   };
 
   return (
@@ -26,41 +34,44 @@ export function EditorShell() {
         onToggleSidebar={() => setIsSidebarOpen((isOpen) => !isOpen)}
       />
       <main className="relative flex flex-1 items-center justify-center">
-        <EditorHome onCreateProject={dialogs.openCreate} />
+        <EditorHome onCreateProject={actions.openCreate} />
       </main>
       <ProjectSidebar
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
-        projects={dialogs.projects}
-        onCreateProject={dialogs.openCreate}
-        onRenameProject={dialogs.openRename}
-        onDeleteProject={dialogs.openDelete}
+        ownedProjects={ownedProjects}
+        sharedProjects={sharedProjects}
+        onCreateProject={actions.openCreate}
+        onRenameProject={actions.openRename}
+        onDeleteProject={actions.openDelete}
       />
       <CreateProjectDialog
-        open={dialogs.openDialog === "create"}
-        name={dialogs.name}
-        slug={dialogs.slug}
-        isSubmitting={dialogs.isSubmitting}
-        onNameChange={dialogs.setName}
+        open={actions.openDialog === "create"}
+        name={actions.name}
+        roomId={actions.roomId}
+        isSubmitting={actions.isSubmitting}
+        error={actions.error}
+        onNameChange={actions.setName}
         onOpenChange={handleOpenChange}
-        onSubmit={dialogs.submit}
+        onSubmit={() => void actions.submit()}
       />
       <RenameProjectDialog
-        open={dialogs.openDialog === "rename"}
-        projectName={dialogs.activeProject?.name ?? ""}
-        name={dialogs.name}
-        slug={dialogs.slug}
-        isSubmitting={dialogs.isSubmitting}
-        onNameChange={dialogs.setName}
+        open={actions.openDialog === "rename"}
+        projectName={actions.activeProject?.name ?? ""}
+        name={actions.name}
+        isSubmitting={actions.isSubmitting}
+        error={actions.error}
+        onNameChange={actions.setName}
         onOpenChange={handleOpenChange}
-        onSubmit={dialogs.submit}
+        onSubmit={() => void actions.submit()}
       />
       <DeleteProjectDialog
-        open={dialogs.openDialog === "delete"}
-        projectName={dialogs.activeProject?.name ?? ""}
-        isSubmitting={dialogs.isSubmitting}
+        open={actions.openDialog === "delete"}
+        projectName={actions.activeProject?.name ?? ""}
+        isSubmitting={actions.isSubmitting}
+        error={actions.error}
         onOpenChange={handleOpenChange}
-        onConfirm={dialogs.submit}
+        onConfirm={() => void actions.submit()}
       />
     </div>
   );

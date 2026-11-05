@@ -1,7 +1,7 @@
 const MAX_SLUG_LENGTH = 48;
 
 /**
- * Derives the project slug previewed in the create dialog. Names are reduced to
+ * Derives the slug that starts a new project's room ID. Names are reduced to
  * lowercase alphanumeric segments joined with single hyphens.
  */
 export function toProjectSlug(name: string): string {
