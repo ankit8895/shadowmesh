@@ -3,14 +3,14 @@
 import { DeleteIcon, FolderOpenIcon, SquarePenIcon } from "lucide-animated";
 
 import { Button } from "@/components/matos-ui/button";
-import type { Project } from "@/lib/mock-projects";
+import type { ProjectSummary } from "@/lib/project-types";
 
 export interface ProjectListProps {
-  projects: Project[];
+  projects: ProjectSummary[];
   emptyTitle: string;
   emptyDescription: string;
-  onRename?: (project: Project) => void;
-  onDelete?: (project: Project) => void;
+  onRename?: (project: ProjectSummary) => void;
+  onDelete?: (project: ProjectSummary) => void;
 }
 
 interface ProjectListEmptyStateProps {
@@ -52,8 +52,8 @@ export function ProjectList({
   return (
     <ul data-slot="project-list" className="flex flex-col gap-0.5">
       {projects.map((project) => {
-        // Actions are only available for projects this user owns.
-        const canManage = project.isOwner && Boolean(onRename && onDelete);
+        // Only owned projects are given handlers; shared projects stay read-only.
+        const canManage = Boolean(onRename && onDelete);
 
         return (
           <li
@@ -65,7 +65,7 @@ export function ProjectList({
               <p className="truncate text-sm font-medium text-copy-primary">
                 {project.name}
               </p>
-              <p className="truncate text-xs text-copy-muted">{project.slug}</p>
+              <p className="truncate text-xs text-copy-muted">{project.id}</p>
             </div>
 
             {canManage ? (

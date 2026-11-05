@@ -10,6 +10,8 @@ change.
 - Complete — Feature 03: Auth
 - Complete — Feature 04: Project Dialogs
 - Complete — Feature 05: Prisma (`context/feature-specs/05-prisma.md`)
+- Complete — Feature 06: Project APIs (`context/feature-specs/06-project-apis.md`)
+- Complete — Feature 07: Wire Editor Home (`context/feature-specs/07-wire-editor-home.md`)
 - Replace `lucide-react` with `lucide-animated` across the entire project.
   All icon imports updated to use `lucide-animated` names (with `Icon` suffix).
 - UI updated to match the 50/50 split-screen sign-in layout: teal-tinted left
@@ -31,7 +33,7 @@ change.
 
 ## Current Goal
 
-- Feature 05 complete. Feature 06 is not specified yet.
+- Feature 07 complete. Feature 08 is not specified yet.
 
 ## Completed
 
@@ -132,6 +134,61 @@ change.
     applied; client generated to `app/generated/prisma`.
   - No queries, API routes or UI were wired to the schema — the spec covers the
     data layer only.
+- Feature 06: Project APIs (`context/feature-specs/06-project-apis.md`).
+  - `GET /api/projects` returns `{ projects }` for the signed-in owner, newest
+    first. `POST /api/projects` returns `{ project }` with `201` and defaults a
+    missing, null or blank name to `Untitled Project`; IDs come from the schema's
+    `cuid()` default.
+  - `PATCH /api/projects/[projectId]` renames and `DELETE` removes the project
+    (`204`, empty body). Both check auth first (`401`), then existence (`404`),
+    then ownership (`403`) before touching the row.
+  - `lib/project-input.ts`: body parsing and validation with no new dependency.
+    Unreadable/non-object JSON, non-string `name`/`description` and a blank
+    rename name return `400` with a message.
+  - `lib/project-access.ts`: `getAuthenticatedUserId()` plus
+    `authorizeProjectOwner()`, which compares the stored `ownerId` with the Clerk
+    user ID. `lib/project-store.ts` holds the four Prisma calls and the shared
+    select that keeps `ownerId` out of responses. `lib/api-response.ts` is the
+    single `{ error }` shape.
+  - `proxy.ts` no longer calls `auth.protect()` for `/api`, so unauthenticated
+    API calls reach the handlers and get a JSON `401` instead of a sign-in
+    redirect. Middleware still runs for API paths, which is what supplies the
+    Clerk auth context the handlers read.
+  - `GET /api/projects` lists owned projects only; projects shared with the
+    signed-in email are resolved through the editor page (Feature 07).
+- Feature 07: Wire Editor Home (`context/feature-specs/07-wire-editor-home.md`).
+  - `app/editor/page.tsx` renders a prerenderable frame and streams the signed-in
+    view: the `EditorProjects` server component calls `auth.protect()`,
+    `getAuthenticatedViewer()` and a `Promise.all` of `listProjectsForOwner` /
+    `listSharedProjects`, then renders `EditorShell` with `ownedProjects` /
+    `sharedProjects`. No client-side fetching for the initial load.
+  - `lib/project-access.ts` gained `getAuthenticatedViewer()` (`userId` plus the
+    Clerk primary email, which collaborator invitations match).
+    `lib/project-store.ts` gained `listSharedProjects()` (collaborator match,
+    owner excluded, case-insensitive) and `findProjectForViewer()`.
+  - `hooks/use-project-actions.ts`: owns dialog kind, active project, name,
+    loading and error state for create / rename / delete. Create generates a
+    six-character base-36 suffix, builds `slugify(name)-suffix` as the room ID and
+    project ID, then navigates to `/editor/{id}`; rename PATCHes and refreshes;
+    delete DELETEs and redirects to `/editor` when the open workspace was
+    removed, otherwise refreshes.
+  - `POST /api/projects` accepts an optional `roomId` (lowercase letters, digits
+    and single hyphens, max 64) and stores it as the project `id`, so the project
+    ID and Liveblocks room ID cannot drift. A taken room ID returns `409` from the
+    Prisma `P2002` unique-constraint error; omitting `roomId` keeps the `cuid()`
+    default.
+  - Dialogs: create shows the live room ID preview and any API error, rename
+    pre-fills the current name, delete names the project; all three render the
+    hook's `error`. Rename no longer validates a slug, since renaming does not
+    change the room ID.
+  - `components/editor/project-sidebar.tsx` takes the two lists directly and
+    `project-list.tsx` shows each project's ID (the Prisma model has no slug
+    field) and offers rename / delete only when handlers are passed, so the
+    Shared tab stays read-only.
+  - Added a minimal `app/editor/[projectId]/page.tsx`: protects the route, loads
+    the project for an owner or collaborator, `notFound()` otherwise, and shows
+    the project name and room ID until the canvas exists.
+  - Removed `lib/mock-projects.ts` and `lib/use-project-dialogs.ts`.
 
 ## In Progress
 
@@ -139,7 +196,7 @@ change.
 
 ## Next Up
 
-- Feature 06 (not yet specified).
+- Feature 08 (not yet specified).
 
 ## Open Questions
 
@@ -182,9 +239,73 @@ change.
 - `lib/prisma.ts` is the single place a client is constructed, and it picks the
   transport from the URL prefix, so local/Prisma Postgres direct URLs and
   Accelerate URLs share one import.
+- Project API contract: success payloads are `{ projects }` or `{ project }`,
+  every error is `{ error: string }`, and `DELETE` replies `204` with no body.
+  Responses never include `ownerId`.
+- API authorization lives in the handlers (`auth()` plus the stored `ownerId`),
+  not in `proxy.ts`. The proxy exempts `/api` deliberately so 401/403 can be
+  real JSON responses rather than redirects; any new API route must therefore
+  authenticate itself.
+- The project ID is the Liveblocks room ID. Create generates
+  `<slug>-<random suffix>` in the browser and sends it as `roomId`;
+  `POST /api/projects` stores it as `Project.id`. There is no separate room
+  column, so the two identifiers cannot diverge.
+- The editor's initial project data is fetched in the server component and passed
+  down as props; client code never fetches project lists. Mutations call the API
+  and then `router.refresh()` (or `router.push` after create), so the server
+  render stays the single source of truth.
+- Shared projects are matched on the viewer's Clerk primary email against
+  `ProjectCollaborator.email`, case-insensitively, with the owner excluded so an
+  owner never sees their own project twice.
+- The editor routes stream their session and database reads from an async child
+  inside a page-level `<Suspense>`. Cache Components reports a top-level `await`
+  on `currentUser()` as uncached data, which blocks prerendering and instant
+  navigation, so the frame must stay free of request-time reads.
 
 ## Session Notes
 
+- Entry 2026-11-05 (Cache Components — editor routes):
+  - `/editor` failed instant-navigation validation: `getAuthenticatedViewer()`
+    ran at the page's top level, so `currentUser()` was uncached data outside
+    `<Suspense>` and the route could not prerender.
+  - Both editor pages now render a static frame plus an async child
+    (`EditorProjects`, `ProjectWorkspace`) inside `<Suspense>`, following the
+    Cache Components authentication guide. Authorization and data behaviour are
+    unchanged; unauthenticated visitors are still redirected by Clerk.
+  - Checks: `npx tsc --noEmit`, `npx eslint` on both pages and
+    `NODE_ENV=production npm run build` pass; `/editor` and
+    `/editor/[projectId]` remain partially prerendered.
+  - Not exercised: the signed-in render needs a browser session, so the dev
+    overlay itself was not re-observed after the change.
+- Entry 2026-11-05 (Feature 07 — wire editor home):
+  - `/editor` fetches owned and shared projects on the server and passes both to
+    `EditorShell`; the sidebar renders them without client fetching.
+  - The project ID is the Liveblocks room ID: create slugifies the name, appends
+    a random six-character suffix, previews it and sends it as `roomId` to
+    `POST /api/projects`, which stores it as `Project.id` and answers `409` on a
+    duplicate instead of `500`.
+  - Added `hooks/use-project-actions.ts` and
+    `app/editor/[projectId]/page.tsx`; removed `lib/mock-projects.ts` and
+    `lib/use-project-dialogs.ts`. Rename refreshes in place; delete redirects to
+    `/editor` when it removes the open workspace and refreshes otherwise.
+  - Checks: `npx tsc --noEmit`, `npx eslint` on the touched files and
+    `NODE_ENV=production npm run build` pass.
+  - Not exercised: authenticated create / rename / delete and the collaborator
+    list, which need a signed-in session and a second user.
+- Entry 2026-11-05 (Feature 06 — project API routes):
+  - Added `app/api/projects/route.ts` (GET, POST) and
+    `app/api/projects/[projectId]/route.ts` (PATCH, DELETE), with the shared
+    helpers `lib/project-access.ts`, `lib/project-input.ts`,
+    `lib/project-store.ts` and `lib/api-response.ts`.
+  - `proxy.ts` now skips `auth.protect()` for `/api`. Before this, an
+    unauthenticated `PATCH /api/projects/[id]` returned a 307 to `/sign-in` and
+    `GET /api/projects` returned a 404 page, so the specified 401 could never be
+    returned. Verified after the change: both answer `401` with
+    `{"error":"Unauthorized."}`.
+  - Checks: `npx tsc --noEmit`, `npx eslint` on the new route/lib files and
+    `NODE_ENV=production npm run build` (routes listed as dynamic) all pass.
+  - Not exercised: authenticated list/create/rename/delete and the 403 path,
+    which need a signed-in session and a second user.
 - Entry 2026-11-05 (Feature 05 — Prisma data layer):
   - Added `prisma/models/project.prisma` with `ProjectStatus`, `Project` and
     `ProjectCollaborator`. Field set follows the spec exactly; the only addition

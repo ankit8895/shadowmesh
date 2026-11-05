@@ -14,6 +14,7 @@ export interface DeleteProjectDialogProps {
   open: boolean;
   projectName: string;
   isSubmitting: boolean;
+  error?: string | null;
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void;
 }
@@ -22,6 +23,7 @@ export function DeleteProjectDialog({
   open,
   projectName,
   isSubmitting,
+  error,
   onOpenChange,
   onConfirm,
 }: DeleteProjectDialogProps) {
@@ -35,6 +37,12 @@ export function DeleteProjectDialog({
             be undone.
           </StackedDialogDescription>
         </StackedDialogHeader>
+
+        {error ? (
+          <p role="alert" className="mt-3 text-xs text-error">
+            {error}
+          </p>
+        ) : null}
 
         <StackedDialogFooter>
           <Button
