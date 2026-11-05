@@ -9,6 +9,7 @@ change.
 - Complete — Feature 02: Editor Chrome
 - Complete — Feature 03: Auth
 - Complete — Feature 04: Project Dialogs
+- Complete — Feature 05: Prisma (`context/feature-specs/05-prisma.md`)
 - Replace `lucide-react` with `lucide-animated` across the entire project.
   All icon imports updated to use `lucide-animated` names (with `Icon` suffix).
 - UI updated to match the 50/50 split-screen sign-in layout: teal-tinted left
@@ -30,7 +31,7 @@ change.
 
 ## Current Goal
 
-- Feature 05 is not specified yet.
+- Feature 05 complete. Feature 06 is not specified yet.
 
 ## Completed
 
@@ -115,6 +116,22 @@ change.
     (`lg:hidden`) that closes the sidebar when tapped.
   - `components/editor/editor-shell.tsx`: owns sidebar state and the dialogs
     hook, and wires home create, sidebar create, rename and delete.
+- Feature 05: Prisma (`context/feature-specs/05-prisma.md`).
+  - `prisma/models/project.prisma`: `ProjectStatus` enum (`DRAFT`, `ARCHIVED`),
+    `Project` (cuid `id`, `ownerId` holding the Clerk user ID, `name`, optional
+    `description`, `status` defaulting to `DRAFT`, optional `canvasJsonPath`,
+    `createdAt` / `updatedAt`, indexes on `ownerId` and `createdAt`) and
+    `ProjectCollaborator` (`project` relation with cascade delete, `email`,
+    `createdAt`, unique `projectId` / `email`, indexes on `email` and
+    `projectId` / `createdAt`).
+  - `lib/prisma.ts`: one cached `PrismaClient`. `DATABASE_URL` starting with
+    `prisma+postgres://` goes through Accelerate (`accelerateUrl`); any other
+    URL goes through `@prisma/adapter-pg`. The instance is cached on `global`
+    outside production so hot reloads reuse it.
+  - Migration `prisma/migrations/20261105120033_init_project_models` created and
+    applied; client generated to `app/generated/prisma`.
+  - No queries, API routes or UI were wired to the schema — the spec covers the
+    data layer only.
 
 ## In Progress
 
@@ -122,7 +139,7 @@ change.
 
 ## Next Up
 
-- Feature 05 (not yet specified).
+- Feature 06 (not yet specified).
 
 ## Open Questions
 
@@ -156,9 +173,34 @@ change.
 - Clerk's appearance is defined in one module (`lib/clerk-appearance.ts`) and
   consumes app CSS variables only, so auth screens follow the design system
   without duplicating palette values.
+- The Prisma schema is multi-file: models live under `prisma/models/` and
+  `prisma7.config.ts` points `schema` at the whole `prisma/` directory. New
+  models get their own file there instead of being added to `schema.prisma`.
+- The generated client output is `app/generated/prisma` (gitignored) and is
+  imported as `@/app/generated/prisma/client`. `prisma generate` must run after
+  schema changes and before a build on a fresh checkout.
+- `lib/prisma.ts` is the single place a client is constructed, and it picks the
+  transport from the URL prefix, so local/Prisma Postgres direct URLs and
+  Accelerate URLs share one import.
 
 ## Session Notes
 
+- Entry 2026-11-05 (Feature 05 — Prisma data layer):
+  - Added `prisma/models/project.prisma` with `ProjectStatus`, `Project` and
+    `ProjectCollaborator`. Field set follows the spec exactly; the only addition
+    beyond the listed fields is `status @default(DRAFT)` and the `id` primary
+    keys Prisma requires.
+  - Added `lib/prisma.ts` with the URL-prefix branch (Accelerate via
+    `accelerateUrl`, otherwise `@prisma/adapter-pg`) and the dev-only `global`
+    cache.
+  - `npx prisma validate` passes, `npx prisma migrate dev --name
+    init_project_models` created and applied
+    `20261105120033_init_project_models` against the configured Prisma Postgres
+    database, and `npx prisma generate` emitted the client.
+  - `npx tsc --noEmit` and `NODE_ENV=production npm run build` both pass.
+  - `prisma7.config.ts` (not `prisma.config.ts`) is the config file the CLI
+    loads in this project; it already pointed `schema` at `prisma/` and reads
+    `DATABASE_URL` through `dotenv/config`. No config changes were needed.
 - Entry 2026-11-04 (dialog close flicker, icon alignment, slug validation):
   - Close flicker: Base UI ends the portal as soon as the *popup's CSS*
     animations finish, so the framer exit never played while the backdrop's CSS
