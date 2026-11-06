@@ -12,6 +12,10 @@ change.
 - Complete — Feature 05: Prisma (`context/feature-specs/05-prisma.md`)
 - Complete — Feature 06: Project APIs (`context/feature-specs/06-project-apis.md`)
 - Complete — Feature 07: Wire Editor Home (`context/feature-specs/07-wire-editor-home.md`)
+- Complete — Feature 08: Editor Workspace Shell
+  (`context/feature-specs/08-editor-workspace-shell.md`)
+- Complete — Feature 09: Share Dialog
+  (`context/feature-specs/09-share-dialog.md`)
 - Replace `lucide-react` with `lucide-animated` across the entire project.
   All icon imports updated to use `lucide-animated` names (with `Icon` suffix).
 - UI updated to match the 50/50 split-screen sign-in layout: teal-tinted left
@@ -33,7 +37,7 @@ change.
 
 ## Current Goal
 
-- Feature 07 complete. Feature 08 is not specified yet.
+- Feature 09 complete. The next feature is not specified yet.
 
 ## Completed
 
@@ -189,6 +193,71 @@ change.
     the project for an owner or collaborator, `notFound()` otherwise, and shows
     the project name and room ID until the canvas exists.
   - Removed `lib/mock-projects.ts` and `lib/use-project-dialogs.ts`.
+- Feature 08: Editor Workspace Shell
+  (`context/feature-specs/08-editor-workspace-shell.md`).
+  - `app/editor/[projectId]/page.tsx` (the room ID is the project ID) stays a
+    server component: a static frame plus a `ProjectWorkspace` async child in
+    `<Suspense>`. It calls `auth.protect()`, then `authorizeProjectAccess()`; a
+    denied or missing project renders `AccessDenied`, and an authorized one
+    renders `WorkspaceShell` with the owned and shared project lists.
+  - `lib/project-access.ts` gained `authorizeProjectAccess()`, which returns
+    `unauthenticated` / `denied` / `authorized` (`viewer` plus `project`). It
+    reuses `findProjectForViewer()`, so owner and collaborator access resolve
+    through the same query, and a missing project is indistinguishable from a
+    forbidden one.
+  - `components/editor/access-denied.tsx`: centered lock chip, a short
+    explanation and a secondary `Back to projects` link to `/editor`.
+  - `EditorNavbar` takes optional `title` (centered, truncating) and `actions`
+    (rendered before `UserButton`). `/editor` passes neither, so its navbar is
+    unchanged.
+  - `ProjectList` / `ProjectSidebar` take `activeProjectId` and highlight the
+    open room with `bg-accent-dim` / `text-brand` and `aria-current="page"`.
+  - `components/editor/workspace-shell.tsx` owns the project sidebar and AI
+    sidebar state plus the create / rename / delete dialogs
+    (`useProjectActions({ activeProjectId })`), so deleting the open project
+    still redirects to `/editor`.
+  - `components/editor/ai-sidebar.tsx`: right-hand overlay placeholder using the
+    same floating surface as the project sidebar and the `moderate` spring. The
+    canvas area is a dark, centered placeholder that fills the remaining space.
+  - Navbar actions follow the spec: a disabled share button (no sharing
+    behaviour yet) and the AI sidebar toggle with `aria-expanded` /
+    `aria-controls`. No canvas logic, Liveblocks or AI chat added.
+  - Checks: `npx tsc --noEmit`, `npx eslint` on every touched file and
+    `NODE_ENV=production npm run build` pass; `/editor/[projectId]` remains
+    partially prerendered.
+- Feature 09: Share Dialog (`context/feature-specs/09-share-dialog.md`).
+  - `components/editor/share-project-dialog.tsx`: the workspace navbar's Share
+    button opens a `StackedDialog` (`max-w-md`) with the project link (copy with
+    a two-second `Copied!` confirmation), an invite form for owners, and the
+    collaborator list. Each row shows the Clerk display name and avatar, falling
+    back to the stored email with a generic user icon when the email has no
+    Clerk account. Collaborators see the same list without the invite form or
+    remove buttons, plus a note that only the owner manages access.
+  - `hooks/use-collaborators.ts` fetches the list when the dialog opens (never
+    on workspace load), then keeps it in sync from the POST / DELETE responses.
+    It tracks loading, invite, per-row removal and error state; API errors are
+    read with the new `lib/api-error.ts` helper.
+  - `app/api/projects/[projectId]/collaborators/route.ts`: `GET` returns
+    `{ collaborators }` for the owner and collaborators (401 unauthenticated,
+    404 for missing or denied); `POST` invites an owner only (401 / 404 / 403 /
+    400 for an invalid or own email / 409 duplicate) and returns
+    `201 { collaborator }`. `.../[collaboratorId]/route.ts` `DELETE` removes an
+    owner only and replies `204`, or 404 when the row is not in this project.
+  - `lib/collaborators.ts` owns the Prisma calls (invitations stored trimmed and
+    lowercased under the existing unique `projectId` / `email` pair) and enriches
+    rows through `clerkClient().users.getUserList({ emailAddress })`, matching
+    any of a user's addresses; Clerk failures are logged and degrade to email
+    only. No local user table was added.
+  - `lib/project-input.ts` gained `parseInviteCollaboratorInput` (non-empty
+    string, max 254 characters, simple email shape). `lib/project-store.ts`
+    selects `ownerId` only so `authorizeProjectAccess()` can return a `role`;
+    `ProjectSummary` still never carries `ownerId` to the client, which receives
+    only `isOwner`.
+  - The workspace route stays `[projectId]`; the collaborator routes nest under
+    it.
+  - Checks: `npx tsc --noEmit`, `npx eslint` on every touched file and
+    `NODE_ENV=production npm run build` pass, with both collaborator routes
+    listed as dynamic.
 
 ## In Progress
 
@@ -196,7 +265,7 @@ change.
 
 ## Next Up
 
-- Feature 08 (not yet specified).
+- The next feature (not yet specified).
 
 ## Open Questions
 
@@ -261,9 +330,66 @@ change.
   inside a page-level `<Suspense>`. Cache Components reports a top-level `await`
   on `currentUser()` as uncached data, which blocks prerendering and instant
   navigation, so the frame must stay free of request-time reads.
+- Workspace access is decided by one helper outside the page
+  (`authorizeProjectAccess`); the page only maps its status to a redirect,
+  `AccessDenied` or the shell. Denied and not-found intentionally share a
+  status so the route cannot be used to enumerate room IDs.
+- The workspace chrome stays presentational: `EditorNavbar` accepts an optional
+  title and actions, while `WorkspaceShell` owns the sidebar / AI sidebar state.
+  `/editor` and `/editor/[projectId]` therefore share the chrome without a
+  shared global store.
+- Collaborator invitations are keyed by email (trimmed, lowercased) and are not
+  user rows. Display names and avatars are read from Clerk on demand and never
+  stored, so profile changes show up the next time the dialog opens; an email
+  without a Clerk account is still a valid invitation and renders as the email
+  only.
+- The share dialog fetches collaborators client-side when it opens, unlike the
+  project lists, which are server-rendered. The list needs Clerk Backend API
+  enrichment and is only visible inside the dialog, so loading it with every
+  workspace would slow project opens for data most viewers never look at. The
+  API re-checks ownership on invite and remove; `isOwner` only shapes the UI.
+- The collaboration role is derived from the project's `ownerId` inside
+  `authorizeProjectAccess()` and exposed as an `ownerId`-free `role`; the client
+  receives only `isOwner`, keeping `ownerId` on the server.
 
 ## Session Notes
 
+- Entry 2026-11-06 (Feature 09 — share dialog):
+  - Added `components/editor/share-project-dialog.tsx`,
+    `hooks/use-collaborators.ts`, `lib/collaborators.ts`, `lib/api-error.ts`,
+    the two collaborator API routes and `parseInviteCollaboratorInput`. The
+    Share button in `components/editor/workspace-shell.tsx` is enabled again
+    and the workspace receives `isOwner` from `authorizeProjectAccess()`.
+  - Invitations store the normalized email; Clerk's `getUserList` enriches up to
+    100 addresses per dialog load with a display name and avatar, and any Clerk
+    failure is logged while rows fall back to email only. No local user table.
+  - `StackedDialogContent` renders nothing while closed, so the project link can
+    read `window.location.origin` at render time without a hydration mismatch.
+  - Checks: `npx tsc --noEmit`, `npx eslint` on all touched files and
+    `NODE_ENV=production npm run build` pass; both collaborator routes are
+    dynamic.
+  - Not exercised: signed-in invite / remove, the collaborator read-only view and
+    Clerk name / avatar enrichment all need two real accounts and a browser
+    session, so they were not manually verified.
+- Entry 2026-11-06 (Feature 08 — editor workspace shell):
+  - Replaced the placeholder `/editor/[projectId]` page with the workspace
+    shell and added `components/editor/workspace-shell.tsx`,
+    `components/editor/ai-sidebar.tsx` and
+    `components/editor/access-denied.tsx`.
+  - `lib/project-access.ts` gained `authorizeProjectAccess()`;
+    `EditorNavbar` gained optional `title` / `actions`; `ProjectList` and
+    `ProjectSidebar` gained `activeProjectId` for the current-room highlight.
+  - The route param stays `[projectId]` rather than the spec's `[roomId]`: the
+    project ID is the Liveblocks room ID by construction, so renaming the
+    folder would only break existing links.
+  - The project sidebar defaults to open in the workspace so the highlighted
+    current room is visible; the AI sidebar defaults closed. The share button
+    is disabled because sharing is out of scope.
+  - Checks: `npx tsc --noEmit`, `npx eslint` on all touched files and
+    `NODE_ENV=production npm run build` pass.
+  - Not exercised: the signed-in workspace render (navbar title, active-room
+    highlight, both sidebar toggles) needs a browser session; the access-denied
+    path needs a project the viewer cannot open.
 - Entry 2026-11-05 (Cache Components — editor routes):
   - `/editor` failed instant-navigation validation: `getAuthenticatedViewer()`
     ran at the page's top level, so `currentUser()` was uncached data outside

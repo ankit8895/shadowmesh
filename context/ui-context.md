@@ -125,7 +125,7 @@ matos-ui surfaces lift along an eight-step ladder instead of using a single card
 
 ## Layout Patterns
 
-- Editor workspace: full-viewport layout — floating sidebar overlay on the left, center canvas, slide-over AI sidebar on the right. The `/editor` home state centers a minimal column (heading, one-line description, primary button) inside the canvas area — no card wrapper. Below `lg`, an open sidebar renders a backdrop scrim that closes it when tapped.
+- Editor workspace: full-viewport layout — floating sidebar overlay on the left, center canvas, slide-over AI sidebar on the right. The `/editor` home state centers a minimal column (heading, one-line description, primary button) inside the canvas area — no card wrapper. Below `lg`, an open sidebar renders a backdrop scrim that closes it when tapped. The project list highlights the open room with `bg-accent-dim` / `text-brand` and `aria-current="page"`. A project the viewer cannot open renders the shared `AccessDenied` panel (lock chip, short message, link back to `/editor`) instead of the workspace.
 - Sidebars: floating overlay with dark semi-transparent background and subtle border.
 - Modals and dialogs: centered overlay, `rounded-3xl`, dark background with backdrop blur.
 - Navbar: top bar with dark background and bottom border.

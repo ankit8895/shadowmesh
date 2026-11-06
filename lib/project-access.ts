@@ -1,6 +1,8 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 
 import { prisma } from "@/lib/prisma";
+import { findProjectForViewer } from "@/lib/project-store";
+import type { ProjectSummary } from "@/lib/project-types";
 
 export interface AuthenticatedViewer {
   userId: string;
@@ -68,4 +70,48 @@ export async function authorizeProjectOwner(
   }
 
   return { status: "authorized", userId };
+}
+
+export type ProjectRole = "owner" | "collaborator";
+
+export type ProjectAccess =
+  | { status: "unauthenticated" }
+  | { status: "denied" }
+  | {
+      status: "authorized";
+      viewer: AuthenticatedViewer;
+      project: ProjectSummary;
+      /** What the viewer may do; the API re-checks ownership on every write. */
+      role: ProjectRole;
+    };
+
+/**
+ * Resolves the viewer and the project for the workspace route. Ownership and
+ * collaborator invitations are both accepted; a missing project and a project
+ * the viewer cannot open both resolve to `denied`, so room IDs cannot be probed
+ * for existence from the page.
+ */
+export async function authorizeProjectAccess(
+  projectId: string,
+): Promise<ProjectAccess> {
+  const viewer = await getAuthenticatedViewer();
+
+  if (!viewer) {
+    return { status: "unauthenticated" };
+  }
+
+  const project = await findProjectForViewer(projectId, viewer);
+
+  if (!project) {
+    return { status: "denied" };
+  }
+
+  const { ownerId, ...summary } = project;
+
+  return {
+    status: "authorized",
+    viewer,
+    project: summary,
+    role: ownerId === viewer.userId ? "owner" : "collaborator",
+  };
 }
