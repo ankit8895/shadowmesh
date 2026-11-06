@@ -55,7 +55,9 @@ export function findProjectForViewer(
     where: collaboratorMatch
       ? { id: projectId, OR: [{ ownerId: viewer.userId }, collaboratorMatch] }
       : { id: projectId, ownerId: viewer.userId },
-    select: projectSummarySelect,
+    // The owner ID decides the viewer's role. It is stripped from the returned
+    // project before it reaches the page, so it never becomes a client prop.
+    select: { ...projectSummarySelect, ownerId: true },
   });
 }
 

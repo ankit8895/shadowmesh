@@ -13,6 +13,14 @@ export interface RenameProjectInput {
   name: string;
 }
 
+export interface InviteCollaboratorInput {
+  email: string;
+}
+
+// Deliberately loose: the address is only an invitation key, not an account.
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MAX_EMAIL_LENGTH = 254;
+
 export type ParseResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: string };
@@ -107,6 +115,35 @@ export async function parseCreateProjectInput(
       roomId: trimmedRoomId === "" ? null : trimmedRoomId,
     },
   };
+}
+
+export async function parseInviteCollaboratorInput(
+  request: Request,
+): Promise<ParseResult<InviteCollaboratorInput>> {
+  const body = await readJsonObject(request);
+
+  if (!body.ok) {
+    return body;
+  }
+
+  const { email } = body.data;
+
+  if (typeof email !== "string" || email.trim() === "") {
+    return { ok: false, error: "An email address is required." };
+  }
+
+  // Stored lowercased so the unique `projectId` / `email` pair cannot be
+  // bypassed by capitalization and matching stays predictable.
+  const normalizedEmail = email.trim().toLowerCase();
+
+  if (
+    normalizedEmail.length > MAX_EMAIL_LENGTH ||
+    !EMAIL_PATTERN.test(normalizedEmail)
+  ) {
+    return { ok: false, error: "Enter a valid email address." };
+  }
+
+  return { ok: true, data: { email: normalizedEmail } };
 }
 
 export async function parseRenameProjectInput(

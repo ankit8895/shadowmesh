@@ -14,6 +14,8 @@ export interface ProjectSidebarProps {
   onClose: () => void;
   ownedProjects: ProjectSummary[];
   sharedProjects: ProjectSummary[];
+  /** The workspace currently open, highlighted in both lists. */
+  activeProjectId?: string | null;
   onCreateProject: () => void;
   onRenameProject: (project: ProjectSummary) => void;
   onDeleteProject: (project: ProjectSummary) => void;
@@ -36,6 +38,7 @@ export function ProjectSidebar({
   onClose,
   ownedProjects,
   sharedProjects,
+  activeProjectId,
   onCreateProject,
   onRenameProject,
   onDeleteProject,
@@ -102,6 +105,7 @@ export function ProjectSidebar({
                         projects={ownedProjects}
                         emptyTitle="No projects yet"
                         emptyDescription="Create a project to start designing your system."
+                        activeProjectId={activeProjectId}
                         onRename={onRenameProject}
                         onDelete={onDeleteProject}
                       />
@@ -115,6 +119,7 @@ export function ProjectSidebar({
                         projects={sharedProjects}
                         emptyTitle="No shared projects"
                         emptyDescription="Projects shared with you will appear here."
+                        activeProjectId={activeProjectId}
                       />
                     ),
                   },

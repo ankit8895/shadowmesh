@@ -4,11 +4,14 @@ import { DeleteIcon, FolderOpenIcon, SquarePenIcon } from "lucide-animated";
 
 import { Button } from "@/components/matos-ui/button";
 import type { ProjectSummary } from "@/lib/project-types";
+import { cn } from "@/lib/utils";
 
 export interface ProjectListProps {
   projects: ProjectSummary[];
   emptyTitle: string;
   emptyDescription: string;
+  /** The workspace currently open, highlighted in the list. */
+  activeProjectId?: string | null;
   onRename?: (project: ProjectSummary) => void;
   onDelete?: (project: ProjectSummary) => void;
 }
@@ -37,6 +40,7 @@ export function ProjectList({
   projects,
   emptyTitle,
   emptyDescription,
+  activeProjectId,
   onRename,
   onDelete,
 }: ProjectListProps) {
@@ -54,15 +58,26 @@ export function ProjectList({
       {projects.map((project) => {
         // Only owned projects are given handlers; shared projects stay read-only.
         const canManage = Boolean(onRename && onDelete);
+        const isActive = project.id === activeProjectId;
 
         return (
           <li
             key={project.id}
             data-slot="project-item"
-            className="flex items-center gap-1 rounded-xl px-2 py-1.5 transition-colors hover:bg-subtle/70"
+            data-active={isActive || undefined}
+            aria-current={isActive ? "page" : undefined}
+            className={cn(
+              "flex items-center gap-1 rounded-xl px-2 py-1.5 transition-colors",
+              isActive ? "bg-accent-dim" : "hover:bg-subtle/70",
+            )}
           >
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-copy-primary">
+              <p
+                className={cn(
+                  "truncate text-sm font-medium",
+                  isActive ? "text-brand" : "text-copy-primary",
+                )}
+              >
                 {project.name}
               </p>
               <p className="truncate text-xs text-copy-muted">{project.id}</p>
