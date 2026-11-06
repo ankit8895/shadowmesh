@@ -7,6 +7,9 @@ import type { ProjectSummary } from "@/lib/project-types";
 export interface AuthenticatedViewer {
   userId: string;
   email: string | null;
+  /** Display name from Clerk, falling back to the email or `Anonymous`. */
+  name: string;
+  avatar: string | null;
 }
 
 export type ProjectAuthorization =
@@ -23,8 +26,9 @@ export async function getAuthenticatedUserId(): Promise<string | null> {
 }
 
 /**
- * Returns the signed-in user's ID and primary email. The email is what matches
- * collaborator invitations, so shared projects are resolved per viewer.
+ * Returns the signed-in user's ID, primary email and Liveblocks profile. The
+ * email matches collaborator invitations, so shared projects are resolved per
+ * viewer, and the name and avatar are attached to Liveblocks sessions.
  */
 export async function getAuthenticatedViewer(): Promise<AuthenticatedViewer | null> {
   const { userId } = await auth();
@@ -38,8 +42,9 @@ export async function getAuthenticatedViewer(): Promise<AuthenticatedViewer | nu
     user?.primaryEmailAddress?.emailAddress ??
     user?.emailAddresses[0]?.emailAddress ??
     null;
+  const name = user?.fullName?.trim() || user?.username || email || "Anonymous";
 
-  return { userId, email };
+  return { userId, email, name, avatar: user?.imageUrl ?? null };
 }
 
 /**

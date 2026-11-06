@@ -16,6 +16,12 @@ change.
   (`context/feature-specs/08-editor-workspace-shell.md`)
 - Complete — Feature 09: Share Dialog
   (`context/feature-specs/09-share-dialog.md`)
+- Complete — Feature 10: Liveblocks Setup
+  (`context/feature-specs/10-liveblocks-setup.md`)
+- Complete — Feature 11: Base Canvas
+  (`context/feature-specs/11-base-canvas.md`)
+- Complete — Feature 12: Shape Panel
+  (`context/feature-specs/12-shape-panel.md`)
 - Replace `lucide-react` with `lucide-animated` across the entire project.
   All icon imports updated to use `lucide-animated` names (with `Icon` suffix).
 - UI updated to match the 50/50 split-screen sign-in layout: teal-tinted left
@@ -37,7 +43,7 @@ change.
 
 ## Current Goal
 
-- Feature 09 complete. The next feature is not specified yet.
+- Feature 12 complete. The next feature is not specified yet.
 
 ## Completed
 
@@ -258,6 +264,91 @@ change.
   - Checks: `npx tsc --noEmit`, `npx eslint` on every touched file and
     `NODE_ENV=production npm run build` pass, with both collaborator routes
     listed as dynamic.
+- Feature 10: Liveblocks Setup (`context/feature-specs/10-liveblocks-setup.md`).
+  - `liveblocks.config.ts` now types the global `Liveblocks` namespace:
+    `Presence` holds `cursor` (`{ x, y }` or `null`) and `isThinking`, and
+    `UserMeta` holds the Clerk user ID plus `info.name`, `info.avatar` and
+    `info.cursorColor`.
+  - `lib/liveblocks.ts` exports `getLiveblocks()`, the cached
+    `@liveblocks/node` client. It is created on first use and cached on
+    `globalThis`, so requests and hot reloads share one instance; construction
+    is deferred so a build without the secret still succeeds and the route can
+    answer with JSON instead of a module-load crash.
+  - `lib/cursor-color.ts` maps a user ID to one of eight palette colors with a
+    stable string hash, so a user keeps the same cursor color across rooms and
+    reloads without storing it.
+  - `app/api/liveblocks-auth/route.ts` (`POST /api/liveblocks-auth`) parses the
+    Liveblocks `{ room }` callback body, resolves it with
+    `authorizeProjectAccess()` (the project ID is the room ID), returns `401`
+    unauthenticated and `403` for a project the caller cannot open, then calls
+    `getOrCreateRoom(room, { defaultAccesses: [] })` and
+    `prepareSession()` with the Clerk name, avatar and generated cursor color.
+    `session.allow(room, ["*:write"])` scopes write access to that one room and
+    the token is returned in Liveblocks' expected `{ token }` body.
+  - `lib/project-input.ts` gained `parseLiveblocksAuthInput`, which requires a
+    non-empty, trimmed room ID matching the project ID pattern (max 64);
+    `lib/project-access.ts` now returns `name` and `avatar` on
+    `AuthenticatedViewer` from the same Clerk read, so the auth route does not
+    fetch the profile twice.
+  - `@liveblocks/node@3.25.0` was added; the previously installed Liveblocks
+    packages did not include the server SDK the auth route needs.
+  - Checks: `npx tsc --noEmit`, `npx eslint` on every touched file and
+    `NODE_ENV=production npm run build` pass, with `/api/liveblocks-auth`
+    listed as dynamic.
+- Feature 11: Base Canvas (`context/feature-specs/11-base-canvas.md`).
+  - `types/canvas.ts` holds the shared canvas contract: the eight
+    `NODE_COLORS` fill/text pairs and six `NODE_SHAPES` from `ui-context.md`,
+    `CanvasNodeData` (`label`, `color`, `shape`) and the `CanvasNode` /
+    `CanvasEdge` types named `canvasNode` / `canvasEdge`.
+  - `components/editor/canvas-room.tsx` is the client room wrapper:
+    `LiveblocksProvider authEndpoint="/api/liveblocks-auth"`, `RoomProvider`
+    with the project ID as room ID and initial presence
+    `{ cursor: null, isThinking: false }`, and `ClientSideSuspense` with a loading
+    state. A small error boundary around the providers catches failed handshakes
+    (which `ClientSideSuspense` does not) and renders a retry panel.
+  - `components/editor/canvas.tsx` binds React Flow to the room with
+    `useLiveblocksFlow<CanvasNode, CanvasEdge>({ suspense: true })`, passing the
+    synced `nodes`, `edges`, `onNodesChange`, `onEdgesChange`, `onConnect` and
+    `onDelete` into `ReactFlow`. The canvas starts empty and uses
+    `ConnectionMode.Loose`, `fitView`, a dot-pattern `Background` and a `MiniMap`
+    tinted through theme tokens.
+  - `components/editor/workspace-shell.tsx` renders `CanvasRoom` in place of the
+    placeholder text; the page and its server-side access and data loading are
+    unchanged.
+  - Scope limits respected: no controls, custom node / edge rendering,
+    persistence or AI behaviour.
+  - Checks: `npx tsc --noEmit`, `npx eslint` on every touched file and
+    `NODE_ENV=production npm run build` pass.
+- Feature 12: Shape Panel (`context/feature-specs/12-shape-panel.md`).
+  - `components/editor/shape-panel.tsx` renders a floating pill toolbar at the
+    bottom centre of the canvas with one draggable button per shape. Each drag
+    sets the `application/x-shadowmesh-shape` payload
+    (`{ shape, width, height }`) through `createShapeDragPayload`.
+  - `lib/canvas-drag.ts` owns the payload type, the MIME constant and the
+    default sizes: rectangle `160x100`, pill `160x72`, circle `120x120`,
+    diamond `180x180` (larger so labels fit), cylinder `140x120` and hexagon
+    `160x140`. `parseShapeDragPayload` re-validates the payload, since drag data
+    is external input.
+  - `components/editor/canvas.tsx` wraps the surface in a `ReactFlowProvider`
+    and handles `dragover` / `drop`: the drop reads and validates the payload,
+    converts the pointer to canvas coordinates with `screenToFlowPosition`,
+    centres the node on the drop point and calls
+    `onNodesChange([{ type: "add", item: node }])`. New nodes use an empty
+    label, `DEFAULT_NODE_COLOR` and the dragged shape, with IDs built from the
+    shape name, a timestamp and a per-session counter.
+  - `components/editor/canvas-node.tsx` is the basic `canvasNode` renderer:
+    every shape is a bordered rectangle with the centered label, tinted from
+    `NODE_COLORS`, plus four hover-revealed connection handles. It is registered
+    through `nodeTypes`, so dragged nodes use the custom canvas node type.
+  - `types/canvas.ts` gained `DEFAULT_NODE_COLOR` (the neutral dark pair) and
+    `NODE_COLORS` is now a const tuple so the default has a concrete type.
+  - Checks: `npx tsc --noEmit`, `npx eslint` on every touched file and
+    `NODE_ENV=production npm run build` pass.
+- Project list navigation: each row in `components/editor/project-list.tsx` is a
+  `next/link` to `/editor/{projectId}`, so the sidebar opens owned and shared
+  projects from the home page and switches projects inside a workspace. The
+  link's `::after` layer stretches over the row, while the rename and delete
+  buttons sit above it.
 
 ## In Progress
 
@@ -269,7 +360,7 @@ change.
 
 ## Open Questions
 
-- None yet.
+- None.
 
 ## Architecture Decisions
 
@@ -351,9 +442,111 @@ change.
 - The collaboration role is derived from the project's `ownerId` inside
   `authorizeProjectAccess()` and exposed as an `ownerId`-free `role`; the client
   receives only `isOwner`, keeping `ownerId` on the server.
+- The Liveblocks node client is a lazy, `globalThis`-cached singleton rather
+  than a module-level instance, so importing the auth route never requires
+  `LIVEBLOCKS_SECRET_KEY` at build time; a missing secret or Liveblocks API
+  failure becomes a JSON 500 from the handler.
+- Room IDs and project IDs are the same value: the auth route validates the
+  requested room with the project ID pattern, checks project access before
+  calling `getOrCreateRoom`, and creates rooms with `defaultAccesses: []`. Rooms
+  are therefore private and only ever created for a verified owner or
+  collaborator.
+- A Liveblocks token grants `["*:write"]` for the single verified room. Cursor
+  colors are derived from a hash of the Clerk user ID over a fixed palette
+  instead of being stored, so the same user is the same color everywhere.
+- `getAuthenticatedViewer()` now includes the Clerk display name and avatar
+  alongside the ID and email. The workspace page ignores them and the auth
+  route attaches them to the session, so the profile is read once per request.
+- The workspace page stays a server component; only `CanvasRoom` and `Canvas`
+  are client components, so the Liveblocks client and React Flow bundle load
+  inside a project instead of on the project home or the editor shell.
+- `useLiveblocksFlow` owns the diagram in Liveblocks Storage under its default
+  `flow` key, so React Flow renders the synced nodes and edges and reports
+  changes back through the hook's handlers. There is no local canvas state or
+  persistence layer on top of Storage.
+- Canvas node data and palettes live in `types/canvas.ts`, outside the
+  components, so the UI, imported templates and background tasks can share one
+  node shape. `color` stores a fill from `NODE_COLORS`, whose `text` half keeps
+  labels legible.
+- The canvas error boundary lives in the room wrapper rather than in the canvas
+  component, because a failed auth handshake throws during `RoomProvider`
+  render, where `ClientSideSuspense` cannot help.
+- Shape drags travel as a custom MIME payload carrying the shape and its
+  default size, so the drop target never has to duplicate the size table and a
+  drag from another page cannot create an unknown node shape. The drop handler
+  still re-validates it before touching the room.
+- New nodes are added through the Liveblocks `onNodesChange` hook with an `add`
+  change instead of local state, so a dropped node is written to shared Storage
+  and appears for every collaborator. IDs combine the shape, timestamp and a
+  counter, which keeps rapid drops in the same millisecond distinct.
+- `canvasNode` is registered once in a module-level `nodeTypes` map. The
+  renderer is deliberately shape-agnostic for now: all six shapes share the
+  bordered rectangle so shape-specific visuals can land without changing node
+  data or storage.
 
 ## Session Notes
 
+- Entry 2026-11-06 (project navigation + Liveblocks keys):
+  - Projects were not clickable: `ProjectList` rendered each project as plain
+    text, so the sidebar had no way to open a workspace. Each row now renders a
+    `next/link` to `/editor/{projectId}` whose `::after` layer covers the row,
+    with the rename / delete buttons raised above it and `aria-current="page"`
+    moving from the list item to the link.
+  - `LIVEBLOCKS_PUBLIC_KEY` and `LIVEBLOCKS_SECRET_KEY` are now set in
+    `.env.local`. A `getRooms` call through `@liveblocks/node` succeeds, so the
+    secret is valid and `/api/liveblocks-auth` can create rooms and issue
+    tokens instead of returning a `500`.
+  - `RoomProvider` in `components/editor/canvas-room.tsx` is keyed by the room
+    ID, because switching projects keeps the workspace subtree mounted and a
+    provider opens its room only once. The key forces a fresh connection and
+    canvas store for the new project.
+  - Checks: `npx tsc --noEmit`, `npx eslint` on `project-list.tsx` and
+    `NODE_ENV=production npm run build` pass.
+  - Not exercised: clicking a link in a signed-in browser. The URL targets are
+    the same routes the create flow already navigates to.
+- Entry 2026-11-06 (Feature 12 — shape panel):
+  - Added `lib/canvas-drag.ts`, `components/editor/shape-panel.tsx` and
+    `components/editor/canvas-node.tsx`; `components/editor/canvas.tsx` now
+    wraps the surface in a `ReactFlowProvider`, owns the drop handler and
+    registers `nodeTypes`.
+  - `lucide-animated` has no diamond, hexagon, cylinder, pill or rectangle
+    icons, so the toolbar buttons use six small inline SVG glyphs that inherit
+    `currentColor`.
+  - The drop handler ignores drags without the custom MIME type, so dragging a
+    file or text over the canvas is unaffected.
+  - Checks: `npx tsc --noEmit`, `npx eslint` on all touched files and
+    `NODE_ENV=production npm run build` pass.
+  - Not exercised: dragging shapes in a live room needs
+    `LIVEBLOCKS_SECRET_KEY` (still unset) and a signed-in browser session, so
+    only types, lint and the production build were verified.
+- Entry 2026-11-06 (Feature 11 — base canvas):
+  - Added `types/canvas.ts`, `components/editor/canvas-room.tsx` and
+    `components/editor/canvas.tsx`, and replaced the placeholder canvas in
+    `components/editor/workspace-shell.tsx`.
+  - `useLiveblocksFlow` is imported from `@liveblocks/react-flow` (the package
+    has no separate suspense entry point) and React Flow's stylesheet is
+    imported by the canvas component.
+  - Checks: `npx tsc --noEmit`, `npx eslint` on all touched files and
+    `NODE_ENV=production npm run build` pass.
+  - Not exercised: a live room connection. It needs `LIVEBLOCKS_SECRET_KEY` in
+    `.env.local` (still unset) plus a browser session, so only types, lint and
+    the production build were verified.
+- Entry 2026-11-06 (Feature 10 — Liveblocks setup):
+  - Typed `Presence` / `UserMeta` in `liveblocks.config.ts`, added
+    `lib/liveblocks.ts` (cached node client) and `lib/cursor-color.ts`, extended
+    `getAuthenticatedViewer()` with the Clerk name and avatar, and added
+    `POST /api/liveblocks-auth` plus `parseLiveblocksAuthInput`.
+  - `@liveblocks/node` was missing from `package.json` even though the other
+    Liveblocks packages were installed, so the server SDK was added at the same
+    version (`3.25.0`).
+  - The route authorizes before it creates the room: `authorizeProjectAccess()`
+    reuses `findProjectForViewer()`, so an owner and an invited collaborator get
+    the same flow while everyone else is rejected with `403`.
+  - Checks: `npx tsc --noEmit`, `npx eslint` on all touched files and
+    `NODE_ENV=production npm run build` pass; `/api/liveblocks-auth` is dynamic.
+  - Not exercised: real token issuance. `LIVEBLOCKS_SECRET_KEY` is not set in
+    `.env.local`, so the route answers `500` until a secret key is added, and a
+    room connection needs the canvas client, which does not exist yet.
 - Entry 2026-11-06 (Feature 09 — share dialog):
   - Added `components/editor/share-project-dialog.tsx`,
     `hooks/use-collaborators.ts`, `lib/collaborators.ts`, `lib/api-error.ts`,
