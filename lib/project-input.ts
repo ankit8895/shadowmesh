@@ -17,6 +17,10 @@ export interface InviteCollaboratorInput {
   email: string;
 }
 
+export interface LiveblocksAuthInput {
+  room: string;
+}
+
 // Deliberately loose: the address is only an invitation key, not an account.
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_EMAIL_LENGTH = 254;
@@ -115,6 +119,34 @@ export async function parseCreateProjectInput(
       roomId: trimmedRoomId === "" ? null : trimmedRoomId,
     },
   };
+}
+
+/** The room ID in a Liveblocks auth request is a project ID. */
+export async function parseLiveblocksAuthInput(
+  request: Request,
+): Promise<ParseResult<LiveblocksAuthInput>> {
+  const body = await readJsonObject(request);
+
+  if (!body.ok) {
+    return body;
+  }
+
+  const { room } = body.data;
+
+  if (typeof room !== "string" || room.trim() === "") {
+    return { ok: false, error: "A room ID is required." };
+  }
+
+  const trimmedRoom = room.trim();
+
+  if (
+    trimmedRoom.length > MAX_ROOM_ID_LENGTH ||
+    !ROOM_ID_PATTERN.test(trimmedRoom)
+  ) {
+    return { ok: false, error: "Enter a valid room ID." };
+  }
+
+  return { ok: true, data: { room: trimmedRoom } };
 }
 
 export async function parseInviteCollaboratorInput(

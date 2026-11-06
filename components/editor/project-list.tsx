@@ -1,6 +1,7 @@
 "use client";
 
 import { DeleteIcon, FolderOpenIcon, SquarePenIcon } from "lucide-animated";
+import Link from "next/link";
 
 import { Button } from "@/components/matos-ui/button";
 import type { ProjectSummary } from "@/lib/project-types";
@@ -65,9 +66,8 @@ export function ProjectList({
             key={project.id}
             data-slot="project-item"
             data-active={isActive || undefined}
-            aria-current={isActive ? "page" : undefined}
             className={cn(
-              "flex items-center gap-1 rounded-xl px-2 py-1.5 transition-colors",
+              "relative flex items-center gap-1 rounded-xl px-2 py-1.5 transition-colors",
               isActive ? "bg-accent-dim" : "hover:bg-subtle/70",
             )}
           >
@@ -78,13 +78,22 @@ export function ProjectList({
                   isActive ? "text-brand" : "text-copy-primary",
                 )}
               >
-                {project.name}
+                {/* The link stretches over the whole row through its ::after
+                    layer, so the row padding opens the project too. Row
+                    actions sit above that layer. */}
+                <Link
+                  href={`/editor/${project.id}`}
+                  aria-current={isActive ? "page" : undefined}
+                  className="rounded-sm after:absolute after:inset-0 after:rounded-xl focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-brand"
+                >
+                  {project.name}
+                </Link>
               </p>
               <p className="truncate text-xs text-copy-muted">{project.id}</p>
             </div>
 
             {canManage ? (
-              <div className="flex shrink-0 items-center">
+              <div className="relative z-10 flex shrink-0 items-center">
                 <Button
                   type="button"
                   variant="ghost"

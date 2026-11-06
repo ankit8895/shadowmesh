@@ -4,6 +4,7 @@ import { SparklesIcon, UsersIcon } from "lucide-animated";
 import { useState } from "react";
 
 import { AiSidebar } from "@/components/editor/ai-sidebar";
+import { CanvasRoom } from "@/components/editor/canvas-room";
 import { CreateProjectDialog } from "@/components/editor/create-project-dialog";
 import { DeleteProjectDialog } from "@/components/editor/delete-project-dialog";
 import { EditorNavbar } from "@/components/editor/editor-navbar";
@@ -24,8 +25,8 @@ export interface WorkspaceShellProps {
 
 /**
  * Full-viewport workspace for a single project: navbar, project sidebar,
- * canvas placeholder and AI sidebar. The canvas and AI chat are placeholders
- * until their own features land.
+ * collaborative canvas and AI sidebar. The canvas opens the project's
+ * Liveblocks room; the AI chat is still a placeholder.
  */
 export function WorkspaceShell({
   project,
@@ -77,21 +78,8 @@ export function WorkspaceShell({
         }
       />
 
-      <main
-        data-slot="workspace-canvas"
-        className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-base"
-      >
-        <div className="flex max-w-md flex-col items-center gap-2 px-6 text-center">
-          <p className="text-xs font-medium tracking-[0.2em] text-copy-faint uppercase">
-            Canvas
-          </p>
-          <p className="text-sm leading-relaxed text-copy-muted">
-            The design canvas for{" "}
-            <span className="text-copy-secondary">{project.name}</span> will
-            appear here.
-          </p>
-          <p className="text-xs text-copy-faint">Room {project.id}</p>
-        </div>
+      <main className="relative min-h-0 flex-1 overflow-hidden bg-base">
+        <CanvasRoom roomId={project.id} />
       </main>
 
       <ProjectSidebar
