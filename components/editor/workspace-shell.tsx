@@ -1,6 +1,6 @@
 "use client";
 
-import { SparklesIcon, UsersIcon } from "lucide-animated";
+import { LayoutGridIcon, SparklesIcon, UsersIcon } from "lucide-animated";
 import { useState } from "react";
 
 import { AiSidebar } from "@/components/editor/ai-sidebar";
@@ -11,6 +11,8 @@ import { EditorNavbar } from "@/components/editor/editor-navbar";
 import { ProjectSidebar } from "@/components/editor/project-sidebar";
 import { RenameProjectDialog } from "@/components/editor/rename-project-dialog";
 import { ShareProjectDialog } from "@/components/editor/share-project-dialog";
+import { StarterTemplatesModal } from "@/components/editor/starter-templates-modal";
+import type { CanvasTemplate } from "@/components/editor/starter-templates";
 import { Button } from "@/components/matos-ui/button";
 import { useProjectActions } from "@/hooks/use-project-actions";
 import type { ProjectSummary } from "@/lib/project-types";
@@ -37,6 +39,10 @@ export function WorkspaceShell({
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isAiSidebarOpen, setIsAiSidebarOpen] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
+  const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
+  const [pendingTemplate, setPendingTemplate] = useState<CanvasTemplate | null>(
+    null,
+  );
   const actions = useProjectActions({ activeProjectId: project.id });
 
   const handleOpenChange = (nextOpen: boolean) => {
@@ -51,6 +57,16 @@ export function WorkspaceShell({
         title={project.name}
         actions={
           <>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="gap-2"
+              onClick={() => setIsTemplatesOpen(true)}
+            >
+              <LayoutGridIcon size={16} aria-hidden="true" />
+              Templates
+            </Button>
             <Button
               type="button"
               variant="ghost"
@@ -79,7 +95,11 @@ export function WorkspaceShell({
       />
 
       <main className="relative min-h-0 flex-1 overflow-hidden bg-base">
-        <CanvasRoom roomId={project.id} />
+        <CanvasRoom
+          roomId={project.id}
+          template={pendingTemplate}
+          onTemplateImported={() => setPendingTemplate(null)}
+        />
       </main>
 
       <ProjectSidebar
@@ -96,6 +116,12 @@ export function WorkspaceShell({
       <AiSidebar
         isOpen={isAiSidebarOpen}
         onClose={() => setIsAiSidebarOpen(false)}
+      />
+
+      <StarterTemplatesModal
+        open={isTemplatesOpen}
+        onOpenChange={setIsTemplatesOpen}
+        onImport={setPendingTemplate}
       />
 
       <ShareProjectDialog

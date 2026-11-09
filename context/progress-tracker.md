@@ -22,6 +22,18 @@ change.
   (`context/feature-specs/11-base-canvas.md`)
 - Complete — Feature 12: Shape Panel
   (`context/feature-specs/12-shape-panel.md`)
+- Complete — Feature 13: Node Shape
+  (`context/feature-specs/13-node-shape.md`)
+- Complete — Feature 14: Node Editing
+  (`context/feature-specs/14-node-editing.md`)
+- Complete — Feature 15: Node Color Toolbar
+  (`context/feature-specs/15-nodes-color-toolbar.md`)
+- Complete — Feature 16: Edge Behavior
+  (`context/feature-specs/16-edge-behavior.md`)
+- Complete — Feature 17: Canvas Ergonomics
+  (`context/feature-specs/17-canvas-ergonomics.md`)
+- Complete — Feature 18: Starter Template
+  (`context/feature-specs/18-starter-template.md`)
 - Replace `lucide-react` with `lucide-animated` across the entire project.
   All icon imports updated to use `lucide-animated` names (with `Icon` suffix).
 - UI updated to match the 50/50 split-screen sign-in layout: teal-tinted left
@@ -43,7 +55,7 @@ change.
 
 ## Current Goal
 
-- Feature 12 complete. The next feature is not specified yet.
+- Feature 18 complete. The next feature is not specified yet.
 
 ## Completed
 
@@ -344,6 +356,124 @@ change.
     `NODE_COLORS` is now a const tuple so the default has a concrete type.
   - Checks: `npx tsc --noEmit`, `npx eslint` on every touched file and
     `NODE_ENV=production npm run build` pass.
+- Feature 13: Node Shape (`context/feature-specs/13-node-shape.md`).
+  - `components/editor/node-shape.tsx` is the shared shape renderer:
+    rectangle, pill and circle use CSS borders / radius, while diamond, hexagon
+    and cylinder render as inline SVGs with `preserveAspectRatio="none"` so
+    they scale with the node. Borders use `border-subtle-border` at rest and
+    `border-brand` / `stroke-brand` when selected.
+  - `components/editor/canvas-node.tsx` delegates to `NodeShape` with the
+    node's stored `shape` and palette fill, keeping the four hover handles.
+  - `components/editor/shape-panel.tsx` shows a ghost preview while a shape is
+    dragged: the drag payload's shape and default size render through
+    `NodeShape` in a `pointer-events-none fixed` layer centered on the cursor,
+    hidden on `drop` or `dragend` (cancel). The native drag image is suppressed
+    with a 1x1 canvas so only the ghost is visible.
+  - Drop handling, node creation and the shape panel layout are unchanged.
+  - Checks: `npx tsc --noEmit`, `npx eslint` on every touched file and
+    `NODE_ENV=production npm run build` pass.
+- Feature 14: Node Editing (`context/feature-specs/14-node-editing.md`).
+  - `components/editor/canvas-node.tsx` renders React Flow's `NodeResizer`
+    when the node is selected: brand-coloured corner handles and edge lines,
+    `minWidth` 120 / `minHeight` 72 so a node cannot collapse, and free
+    (non-aspect-locked) resizing. Resizer dimension changes go through the
+    existing `onNodesChange` handler, which Liveblocks applies to Storage.
+  - Double-clicking a node's label area opens a centered, auto-sizing
+    `<textarea>` over the label; edits are written on every keystroke through
+    the new `CanvasNodeActionsProvider` (a `replace` node change built from the
+    synced node), so labels stay in collaborative Storage. Blur or `Escape`
+    closes the editor. Empty labels show a faint centered "Label" placeholder
+    both at rest and while editing.
+  - The editor textarea carries `nodrag`, `nopan` and `nowheel` so typing or
+    selecting text never drags the node, pans the canvas or zooms it.
+    `zoomOnDoubleClick` is disabled on the canvas so opening the editor never
+    zooms the viewport.
+  - Shape rendering, the shape panel, the drag preview and node creation are
+    unchanged.
+  - Checks: `npx tsc --noEmit`, `npx eslint` on every touched file and
+    `NODE_ENV=production npm run build` pass.
+- Feature 15: Node Color Toolbar
+  (`context/feature-specs/15-nodes-color-toolbar.md`).
+  - `types/canvas.ts` adds a human-readable `name` to each `NodeColor` pair so
+    the toolbar can label its swatches; the fills and text colors are the eight
+    pairs already defined from `ui-context.md`.
+  - `components/editor/node-color-toolbar.tsx` renders a `NodeToolbar` above a
+    selected node with one swatch per color pair. Swatches sit on the node's
+    text color via `currentColor`, the active swatch gets a tight 2px ring in
+    its paired text color, and hovering adds a 6px glow of that text color.
+  - Swatches call the shared node-data action with `{ color }`. Since the node
+    derives its text color from `NODE_COLORS`, choosing a swatch updates the
+    background and text together through the existing collaborative `replace`
+    flow, with no server calls.
+  - The toolbar carries `nodrag`, `nopan` and `nowheel`, and React Flow portals
+    it above the node, so swatch interactions cannot drag the node or pan the
+    canvas.
+  - Drag/drop, node selection, shape rendering and the resize/label editing
+    behavior are unchanged.
+  - Checks: `npx tsc --noEmit`, `npx eslint` on every touched file and
+    `NODE_ENV=production npm run build` pass.
+- Feature 16: Edge Behavior (`context/feature-specs/16-edge-behavior.md`).
+  - `types/canvas.ts` gained `CanvasEdgeData { label }`, so a `canvasEdge` can
+    carry an inline label in the same collaborative state as nodes.
+  - `components/editor/canvas-edge.tsx` is the custom renderer:
+    `getSmoothStepPath` right-angle routing, a thin rounded stroke that is
+    dimmed at rest and brightens on hover / selection, a 24px invisible
+    interaction path for easier clicking, and the edge's arrow marker.
+  - `EdgeLabelRenderer` places the label at the `labelX` / `labelY` midpoint
+    returned by `getSmoothStepPath`. Saved labels render as small pills;
+    double-clicking the edge opens a growing input (`field-sizing-content`)
+    that saves on blur, `Enter` or `Escape`. A selected edge without a label
+    shows a faint hint. The label surface carries `nodrag`, `nopan` and
+    `nowheel`.
+  - `components/editor/canvas-edge-actions.tsx` exposes `updateEdgeLabel`;
+    `canvas.tsx` applies it as a `replace` edge change through Liveblocks, the
+    same collaborative path as node labels.
+  - New connections no longer use the hook's plain `onConnect`. The canvas
+    builds the edge with `type: "canvasEdge"`, empty label data and a closed
+    arrow `markerEnd`, then adds it with an `add` edge change, so every new edge
+    uses the custom renderer.
+  - Node handles are now 8px white dots with a dark border, still on all four
+    sides and hidden until the node is hovered.
+  - Checks: `npx tsc --noEmit`, `npx eslint` on every touched file and
+    `NODE_ENV=production npm run build` pass.
+- Feature 17: Canvas Ergonomics
+  (`context/feature-specs/17-canvas-ergonomics.md`).
+  - `components/editor/canvas-controls.tsx` renders a floating pill at the
+    bottom-left, above the shape panel, with two groups split by a thin divider:
+    zoom out / fit view / zoom in, then undo / redo.
+  - Zoom actions use the React Flow instance (`zoomOut`, `fitView`, `zoomIn`)
+    with a 200ms animation; fit view also applies a small padding.
+  - Undo and redo use Liveblocks' `useUndo` / `useRedo`; `useCanUndo` /
+    `useCanRedo` disable the buttons, and the shared Button styles dim disabled
+    controls. Liveblocks history remains per-client.
+  - `hooks/use-keyboard-shortcuts.ts` binds `+` / `=`, `-`, `Cmd/Ctrl+Z`,
+    `Cmd/Ctrl+Shift+Z` and `Cmd/Ctrl+Y` on `window`. It ignores events from
+    inputs, textareas, selects and content-editable elements, and leaves
+    modified zoom keys to the browser.
+  - The `MiniMap` was removed from the canvas.
+  - Checks: `npx tsc --noEmit`, `npx eslint` on every touched file and
+    `NODE_ENV=production npm run build` pass.
+- Feature 18: Starter Template (`context/feature-specs/18-starter-template.md`).
+  - `components/editor/starter-templates.ts` defines `CanvasTemplate` and
+    `CANVAS_TEMPLATES` with microservices, CI/CD pipeline and event-driven
+    diagrams. Small `templateNode` / `templateEdge` helpers keep the data
+    readable; nodes use `CanvasNode` with the shared `NODE_COLORS` fills, and
+    edges use `CanvasEdge` with labels and the closed arrow marker.
+  - `components/editor/starter-templates-modal.tsx` is a `StackedDialog` with a
+    scrollable two-column grid of cards. Each card shows the template name and
+    description plus a fixed-viewport preview: bounds are computed from node
+    positions and sizes, edges are lines between node centres, and nodes render
+    through the shared `NodeShape` — no React Flow instance is involved.
+  - The workspace navbar gained a `Templates` button. `WorkspaceShell` owns the
+    dialog state and a transient `pendingTemplate`, passed through `CanvasRoom`
+    to `Canvas`.
+  - `CanvasFlow` imports a pending template through the existing Liveblocks
+    `onNodesChange` / `onEdgesChange` handlers: every existing node and edge is
+    removed and the template's items are added in the same change lists, so the
+    canvas is replaced rather than merged. The view fits once the new nodes
+    reach the synced `nodes` prop.
+  - Checks: `npx tsc --noEmit`, `npx eslint` on every touched file and
+    `NODE_ENV=production npm run build` pass.
 - Project list navigation: each row in `components/editor/project-list.tsx` is a
   `next/link` to `/editor/{projectId}`, so the sidebar opens owned and shared
   projects from the home page and switches projects inside a workspace. The
@@ -479,13 +609,173 @@ change.
   change instead of local state, so a dropped node is written to shared Storage
   and appears for every collaborator. IDs combine the shape, timestamp and a
   counter, which keeps rapid drops in the same millisecond distinct.
-- `canvasNode` is registered once in a module-level `nodeTypes` map. The
-  renderer is deliberately shape-agnostic for now: all six shapes share the
-  bordered rectangle so shape-specific visuals can land without changing node
-  data or storage.
+- `canvasNode` is registered once in a module-level `nodeTypes` map. Shape
+  visuals live in one `NodeShape` component that both the node renderer and the
+  drag ghost use, so the preview always matches what a drop creates. Node data
+  and Storage are unchanged: the shape comes from the stored `shape` field and
+  SVG shapes scale through `preserveAspectRatio="none"`.
+- The shape drag preview is local to the shape panel: the panel keeps the
+  dragged payload plus the latest `dragover` position and clears it on `drop`
+  or `dragend`. The canvas drop handler is untouched, so preview state cannot
+  change what a drop creates.
+- Node resizing uses React Flow's `NodeResizer`, which emits standard
+  `dimensions` changes through `onNodesChange`; `useLiveblocksFlow` writes the
+  new `width` / `height` to the Storage node. There is no second resize
+  implementation and resized nodes sync like every other node update.
+- Custom node renderers cannot reach the canvas' `onNodesChange` directly, so
+  label edits travel through a small `CanvasNodeActionsProvider` context. It
+  builds a `replace` change from the synced node and lets Liveblocks reconcile
+  the label. `useReactFlow().updateNodeData` is deliberately not used: it only
+  mutates the local store and does not emit `onNodesChange`.
+- The canvas disables `zoomOnDoubleClick`; React Flow attaches d3-zoom's
+  double-click handler to the pane, where a node-level `stopPropagation` cannot
+  cancel it, so the gesture opens the label editor instead of zooming.
+- Node color themes stay a fixed palette in `types/canvas.ts`. A node stores
+  only the fill, and its text color is looked up from the same pair, so a theme
+  change can never leave unreadable text behind and no extra Storage field is
+  needed. The toolbar reuses the same `replace` action as label edits.
+- The color toolbar is React Flow's `NodeToolbar`, which portals above the node
+  and stays outside its drag surface. `nodrag` / `nopan` on the toolbar keep
+  swatch clicks from starting a node drag or a pane pan.
+- Edge labels follow the node-label pattern through a separate
+  `CanvasEdgeActionsProvider`: the renderer builds a `replace` edge change from
+  the synced edge, so labels are written to Liveblocks Storage rather than a
+  local component state, and no server call is involved.
+- New edges are created by the canvas instead of the hook's `onConnect`, because
+  the hook's `addEdge(connection, [])` produces an untyped edge that React Flow
+  would render with its default renderer. Building the edge in the canvas is the
+  only way to set `type: "canvasEdge"` and its arrow marker at creation time.
+- Edge hover and selection are local to the edge renderer: the stroke color is
+  computed from `selected` plus a local hover flag, and set inline so React
+  Flow's default selected-edge stroke cannot override the theme token.
+- Canvas zoom and history controls live in one small `CanvasControls`
+  component rendered beside the flow, so it can read both the React Flow
+  instance and Liveblocks' history hooks without adding any canvas state. The
+  keyboard hook receives those same handlers instead of reimplementing them.
+- Keyboard shortcuts are bound once on `window` by `useKeyboardShortcuts` and
+  bail on editable targets, which keeps node/edge label inputs and app forms
+  working normally. Zoom keys are only handled without `Cmd` / `Ctrl` so the
+  browser's own zoom shortcuts still win.
+- Starter templates are static data in `components/editor/starter-templates.ts`,
+  separate from the dialog that presents them. Template nodes and edges use the
+  same `CanvasNode` / `CanvasEdge` contracts as dropped nodes and drawn edges,
+  so an import needs no special rendering path.
+- The dialog is owned by `WorkspaceShell`, while the import runs in `CanvasFlow`
+  where the Liveblocks change handlers and the React Flow instance exist. Only a
+  transient `pendingTemplate` prop crosses that boundary; once imported,
+  `onTemplateImported` clears it.
+- A template import is a replace, not a merge: the same `onNodesChange` /
+  `onEdgesChange` calls remove every existing item and add the template items,
+  with the removes first. That keeps the operation inside the collaborative
+  state flow and makes it one history step per collection.
+- Template previews are intentionally independent of React Flow. Bounds come
+  from node positions and sizes, edges are straight centre-to-centre lines, and
+  nodes reuse `NodeShape` inside a scaled container, so previews stay cheap and
+  cannot drift from the real shape visuals.
 
 ## Session Notes
 
+- Entry 2026-11-09 (Feature 18 — starter templates):
+  - Added `components/editor/starter-templates.ts` with three templates
+    (microservices, CI/CD pipeline, event-driven system) built from the shared
+    `CanvasNode` / `CanvasEdge` types, palette fills and helper builders.
+  - Added `components/editor/starter-templates-modal.tsx`: a `StackedDialog`
+    with a scrollable grid of cards, each with a fixed-viewport preview that
+    fits computed node bounds, draws centre-to-centre edge lines and reuses
+    `NodeShape` for the nodes.
+  - Added a `Templates` navbar action. `WorkspaceShell` owns the dialog and a
+    transient `pendingTemplate`, forwarded through `CanvasRoom` to the canvas.
+    `CanvasFlow` replaces every existing node and edge with the template's items
+    through the Liveblocks change handlers, then fits the view once the new
+    nodes arrive in synced state.
+  - `ui-context.md` documents the navbar Templates entry point and the dialog.
+  - Checks: `npx tsc --noEmit`, `npx eslint` on the touched files and
+    `NODE_ENV=production npm run build` pass.
+  - Not exercised: opening the dialog and importing a template in a signed-in
+    browser with a live room; verification covered types, lint and the
+    production build.
+- Entry 2026-11-09 (Feature 17 — canvas ergonomics):
+  - Added `components/editor/canvas-controls.tsx`: a bottom-left pill above the
+    shape panel with zoom out / fit view / zoom in, a thin divider, and undo /
+    redo. Zoom uses `useReactFlow()` with a 200ms animation; history uses
+    `useUndo` / `useRedo` and dims the buttons via `useCanUndo` / `useCanRedo`.
+  - Added `hooks/use-keyboard-shortcuts.ts` for `+` / `=`, `-`, `Cmd/Ctrl+Z`,
+    `Cmd/Ctrl+Shift+Z` and `Cmd/Ctrl+Y`. It skips inputs, textareas, selects and
+    content-editable elements and leaves modified zoom keys to the browser.
+  - Removed the `MiniMap` from `canvas.tsx`; the shape panel and node/edge
+    rendering are unchanged.
+  - lucide-animated has no plain minus or zoom icons, so the zoom-out and
+    zoom-in buttons use small inline SVG glyphs (MaximizeIcon covers fit view).
+  - Checks: `npx tsc --noEmit`, `npx eslint` on the touched files and
+    `NODE_ENV=production npm run build` pass.
+  - Not exercised: zoom animation, history undo/redo and the shortcuts in a
+    signed-in browser with a Liveblocks room; verification covered types, lint
+    and the production build.
+- Entry 2026-11-09 (Feature 16 — edge behavior):
+  - Added `components/editor/canvas-edge.tsx` and
+    `components/editor/canvas-edge-actions.tsx`. Edges now use smooth-step
+    right-angle routing, a dimmed 1.5px stroke that brightens on hover or
+    selection, a closed arrow marker, and a 24px invisible interaction path so
+    they are easier to hit without looking thicker.
+  - Edge labels render through `EdgeLabelRenderer` at the `getSmoothStepPath`
+    midpoint as small pills; double-click opens a `field-sizing-content` input
+    that saves on blur, `Enter` or `Escape`, and a selected edge with no label
+    shows a faint "Add label" hint. Saved labels go through `onEdgesChange`'s
+    `replace` action, so they live in collaborative Storage.
+  - New connections build a typed `canvasEdge` with an empty label and arrow
+    marker in `canvas.tsx`, because the Liveblocks hook's own `onConnect`
+    creates untyped edges that would render with the default edge.
+  - Node handles keep all four sides but now render as 8px white dots with a
+    dark border that fade in on hover.
+  - `ui-context.md`'s Edge Style section was updated to describe the new
+    renderer and label behavior.
+  - Checks: `npx tsc --noEmit`, `npx eslint` on the touched files and
+    `NODE_ENV=production npm run build` pass.
+  - Not exercised: creating edges and editing labels in a live room with a
+    second collaborator; verification covered types, lint and the production
+    build.
+- Entry 2026-11-09 (Feature 15 — node color toolbar):
+  - Added `components/editor/node-color-toolbar.tsx`: a `NodeToolbar` above the
+    selected node with eight swatches, one per `NODE_COLORS` pair. Active
+    swatches get a tight ring in their text color, hover adds a small glow of
+    the same color, and the toolbar is marked `nodrag nopan nowheel`.
+  - Generalized `CanvasNodeActionsProvider` from a label-only action to
+    `updateNodeData(id, patch)`, so both label edits and color changes go
+    through one collaborative `replace` path.
+  - Palette entries gained `name` for accessible swatch labels; fills and text
+    colors are unchanged. Selecting a swatch writes `{ color }` and the node
+    derives the paired text color, updating background and text together.
+  - Checks: `npx tsc --noEmit`, `npx eslint` on the touched files and
+    `NODE_ENV=production npm run build` pass.
+  - Not exercised: clicking swatches in a live room with a second collaborator;
+    verification covered types, lint and the production build.
+- Entry 2026-11-09 (Feature 14 — node resizing and labels):
+  - Selected nodes now show `NodeResizer` corner handles and edge lines in the
+    brand accent, with a 120x72 minimum so labels always have room. Resizes are
+    written through the existing Liveblocks-backed `onNodesChange` flow.
+  - Double-clicking a label opens a centered textarea overlay that updates the
+    label on every keystroke via a `replace` node change in collaborative
+    Storage. It closes on blur or `Escape`, and empty labels show a faint
+    "Label" placeholder in the same centered position.
+  - Textarea interactions are isolated with `nodrag` / `nopan` / `nowheel`, and
+    the canvas' double-click zoom was turned off so the gesture is editing-only.
+  - Checks: `npx tsc --noEmit`, `npx eslint` on the touched files and
+    `NODE_ENV=production npm run build` pass.
+  - Not exercised: live resize and typing with a second collaborator, which
+    needs a signed-in browser and a Liveblocks room; verification covered types,
+    lint and the production build.
+- Entry 2026-11-09 (Feature 13 — node shapes):
+  - Added `components/editor/node-shape.tsx`; `canvas-node.tsx` now renders
+    each node's shape (CSS for rectangle / pill / circle, SVG for diamond /
+    hexagon / cylinder) with a subtle border that switches to `brand` when the
+    node is selected.
+  - `shape-panel.tsx` renders a cursor-following ghost of the dragged shape at
+    the payload's default size and clears it on drop or drag cancel. The native
+    drag image is suppressed so only the ghost shows.
+  - Checks: `npx tsc --noEmit`, `npx eslint` on the touched files and
+    `NODE_ENV=production npm run build` pass.
+  - Not exercised: dragging shapes in a signed-in browser needs a live
+    Liveblocks room; verification covered types, lint and the production build.
 - Entry 2026-11-06 (project navigation + Liveblocks keys):
   - Projects were not clickable: `ProjectList` rendered each project as plain
     text, so the sidebar had no way to open a workspace. Each row now renders a
