@@ -15,19 +15,24 @@ export interface CanvasTemplate {
   edges: CanvasEdge[];
 }
 
-/** Palette fills by name, so template data reads as colors instead of hex. */
-const FILLS = {
-  neutral: NODE_COLORS[0].fill,
-  blue: NODE_COLORS[1].fill,
-  purple: NODE_COLORS[2].fill,
-  orange: NODE_COLORS[3].fill,
-  red: NODE_COLORS[4].fill,
-  pink: NODE_COLORS[5].fill,
-  green: NODE_COLORS[6].fill,
-  teal: NODE_COLORS[7].fill,
-} as const;
+type TemplateColor =
+  | "neutral"
+  | "blue"
+  | "purple"
+  | "orange"
+  | "red"
+  | "pink"
+  | "green"
+  | "teal";
 
-type TemplateColor = keyof typeof FILLS;
+/** Resolves palette fills by color name so template data is not index-bound. */
+function fillFor(color: TemplateColor): string {
+  const match = NODE_COLORS.find(
+    (entry) => entry.name.toLowerCase() === color,
+  );
+
+  return (match ?? NODE_COLORS[0]).fill;
+}
 type HandleId = "top" | "right" | "bottom" | "left";
 
 interface TemplateNodeSpec {
@@ -57,7 +62,7 @@ function templateNode({
     position: { x, y },
     width,
     height,
-    data: { label, color: FILLS[color], shape },
+    data: { label, color: fillFor(color), shape },
   };
 }
 

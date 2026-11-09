@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
+
 import { Button } from "@/components/matos-ui/button";
 import {
   StackedDialog,
@@ -73,6 +75,7 @@ export function StarterTemplatesModal({
                   variant="secondary"
                   size="sm"
                   className="self-start"
+                  aria-label={`Import ${template.name} template`}
                   onClick={() => handleImport(template)}
                 >
                   Import
@@ -124,23 +127,64 @@ function getTemplateBounds(template: CanvasTemplate): TemplateBounds {
 
 /**
  * Lightweight preview: nodes render through the shared `NodeShape` and edges
- * are plain lines between node centres, all scaled to fit a fixed viewport.
+ * are plain lines between node centres, all scaled to fit the measured card
+ * width (capped at the default preview size).
  */
 function TemplatePreview({ template }: { template: CanvasTemplate }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [viewport, setViewport] = useState({
+    width: PREVIEW_WIDTH,
+    height: PREVIEW_HEIGHT,
+  });
   const bounds = getTemplateBounds(template);
-  const scale = Math.min(
-    (PREVIEW_WIDTH - PREVIEW_PADDING * 2) / bounds.width,
-    (PREVIEW_HEIGHT - PREVIEW_PADDING * 2) / bounds.height,
+  const scale = Math.max(
+    0.01,
+    Math.min(
+      (viewport.width - PREVIEW_PADDING * 2) / bounds.width,
+      (viewport.height - PREVIEW_PADDING * 2) / bounds.height,
+    ),
   );
-  const offsetX = (PREVIEW_WIDTH - bounds.width * scale) / 2;
-  const offsetY = (PREVIEW_HEIGHT - bounds.height * scale) / 2;
+  const offsetX = (viewport.width - bounds.width * scale) / 2;
+  const offsetY = (viewport.height - bounds.height * scale) / 2;
   const nodesById = new Map(template.nodes.map((node) => [node.id, node]));
+
+  useEffect(() => {
+    const element = containerRef.current;
+
+    if (!element) {
+      return;
+    }
+
+    function measure(width: number) {
+      const nextWidth = Math.min(PREVIEW_WIDTH, Math.max(width, 1));
+
+      setViewport({
+        width: nextWidth,
+        height: (nextWidth / PREVIEW_WIDTH) * PREVIEW_HEIGHT,
+      });
+    }
+
+    measure(element.getBoundingClientRect().width);
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+
+      if (entry) {
+        measure(entry.contentRect.width);
+      }
+    });
+
+    observer.observe(element);
+
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <div
+      ref={containerRef}
       aria-hidden="true"
-      className="relative mx-auto overflow-hidden rounded-xl border border-surface-border/60 bg-base"
-      style={{ width: PREVIEW_WIDTH, height: PREVIEW_HEIGHT }}
+      className="relative mx-auto w-full max-w-[240px] overflow-hidden rounded-xl border border-surface-border/60 bg-base"
+      style={{ aspectRatio: `${PREVIEW_WIDTH} / ${PREVIEW_HEIGHT}` }}
     >
       <div
         className="absolute top-0 left-0 origin-top-left"
