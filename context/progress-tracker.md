@@ -461,17 +461,19 @@ change.
     edges use `CanvasEdge` with labels and the closed arrow marker.
   - `components/editor/starter-templates-modal.tsx` is a `StackedDialog` with a
     scrollable two-column grid of cards. Each card shows the template name and
-    description plus a fixed-viewport preview: bounds are computed from node
-    positions and sizes, edges are lines between node centres, and nodes render
-    through the shared `NodeShape` — no React Flow instance is involved.
+    description plus a responsive preview (240×132 max): bounds are computed
+    from node positions and sizes, edges are lines between node centres, and
+    nodes render through the shared `NodeShape` — no React Flow instance is
+    involved. Import buttons include the template name in their accessible
+    label.
   - The workspace navbar gained a `Templates` button. `WorkspaceShell` owns the
     dialog state and a transient `pendingTemplate`, passed through `CanvasRoom`
     to `Canvas`.
-  - `CanvasFlow` imports a pending template through the existing Liveblocks
-    `onNodesChange` / `onEdgesChange` handlers: every existing node and edge is
-    removed and the template's items are added in the same change lists, so the
-    canvas is replaced rather than merged. The view fits once the new nodes
-    reach the synced `nodes` prop.
+  - `CanvasFlow` imports a pending template inside `room.batch`: `onDelete`
+    removes every existing node and edge (Liveblocks ignores `remove` changes
+    in `onNodesChange` / `onEdgesChange`), then the template's items are added.
+    Batching makes the whole replace one storage mutation and one undo step.
+    The view fits once the new nodes reach the synced `nodes` prop.
   - Checks: `npx tsc --noEmit`, `npx eslint` on every touched file and
     `NODE_ENV=production npm run build` pass.
 - Project list navigation: each row in `components/editor/project-list.tsx` is a
@@ -664,10 +666,14 @@ change.
   where the Liveblocks change handlers and the React Flow instance exist. Only a
   transient `pendingTemplate` prop crosses that boundary; once imported,
   `onTemplateImported` clears it.
-- A template import is a replace, not a merge: the same `onNodesChange` /
-  `onEdgesChange` calls remove every existing item and add the template items,
-  with the removes first. That keeps the operation inside the collaborative
-  state flow and makes it one history step per collection.
+- A template import is a replace, not a merge: `onDelete` removes every
+  existing node and edge, then the template items are added. The calls run
+  inside `room.batch`, so the whole replace is one collaborative mutation and
+  one undo step. `onNodesChange` / `onEdgesChange` cannot delete because
+  Liveblocks treats their `remove` changes as a no-op.
+- Legacy edges stored before Feature 16 are normalized at render time
+  (`type: "canvasEdge"`, label data, closed arrow marker), so rooms created
+  earlier still show the current edge style without a storage migration.
 - Template previews are intentionally independent of React Flow. Bounds come
   from node positions and sizes, edges are straight centre-to-centre lines, and
   nodes reuse `NodeShape` inside a scaled container, so previews stay cheap and
@@ -675,14 +681,27 @@ change.
 
 ## Session Notes
 
+- Entry 2026-11-09 (review fixes — template replacement and polish):
+  - Fixed template imports to replace the canvas through `onDelete` inside
+    `room.batch`; the previous `remove` changes were silently ignored by
+    Liveblocks, so imports merged into existing content.
+  - Normalized legacy edges at render time so older room content gets the
+    custom edge renderer, label data and arrow marker.
+  - Made template previews responsive down to narrow dialogs, gave each Import
+    button a template-specific accessible name, and resolved template palette
+    fills by color name instead of array index.
+  - Edge hover now also triggers from the portaled label pill, and the arrow
+    marker follows the line color when hovered or selected.
+  - Checks: `npx tsc --noEmit`, targeted `npx eslint` and
+    `NODE_ENV=production npm run build` pass.
 - Entry 2026-11-09 (Feature 18 — starter templates):
   - Added `components/editor/starter-templates.ts` with three templates
     (microservices, CI/CD pipeline, event-driven system) built from the shared
     `CanvasNode` / `CanvasEdge` types, palette fills and helper builders.
   - Added `components/editor/starter-templates-modal.tsx`: a `StackedDialog`
-    with a scrollable grid of cards, each with a fixed-viewport preview that
-    fits computed node bounds, draws centre-to-centre edge lines and reuses
-    `NodeShape` for the nodes.
+    with a scrollable grid of cards, each with a preview that fits computed
+    node bounds, draws centre-to-centre edge lines and reuses `NodeShape` for
+    the nodes.
   - Added a `Templates` navbar action. `WorkspaceShell` owns the dialog and a
     transient `pendingTemplate`, forwarded through `CanvasRoom` to the canvas.
     `CanvasFlow` replaces every existing node and edge with the template's items

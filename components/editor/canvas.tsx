@@ -3,6 +3,7 @@
 import "@xyflow/react/dist/style.css";
 
 import { useLiveblocksFlow } from "@liveblocks/react-flow";
+import { useRoom } from "@liveblocks/react/suspense";
 import {
   Background,
   BackgroundVariant,
@@ -17,7 +18,13 @@ import {
   type NodeChange,
   type NodeTypes,
 } from "@xyflow/react";
-import { useCallback, useEffect, useRef, type DragEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  type DragEvent,
+} from "react";
 
 import { CanvasControls } from "@/components/editor/canvas-controls";
 import { CanvasEdgeActionsProvider } from "@/components/editor/canvas-edge-actions";
@@ -35,6 +42,29 @@ import type { CanvasEdge, CanvasNode, CanvasNodeData } from "@/types/canvas";
 
 const nodeTypes = { canvasNode: CanvasNodeView } satisfies NodeTypes;
 const edgeTypes = { canvasEdge: CanvasEdgeView } satisfies EdgeTypes;
+
+const DEFAULT_EDGE_MARKER = {
+  type: MarkerType.ArrowClosed,
+  width: 16,
+  height: 16,
+  color: "var(--text-secondary)",
+} as const;
+
+/**
+ * Edges stored before the custom renderer existed have no type, data or
+ * marker, so they are normalized for rendering instead of migrated in place.
+ */
+function normalizeEdge(edge: CanvasEdge): CanvasEdge {
+  return {
+    ...edge,
+    type: "canvasEdge",
+    data: { label: edge.data?.label ?? "" },
+    markerEnd:
+      edge.markerEnd && typeof edge.markerEnd === "object"
+        ? { ...DEFAULT_EDGE_MARKER, ...edge.markerEnd }
+        : DEFAULT_EDGE_MARKER,
+  };
+}
 
 export interface CanvasProps {
   /** A template to import; cleared through `onTemplateImported` after loading. */
@@ -65,6 +95,8 @@ export function Canvas({ template, onTemplateImported }: CanvasProps) {
 function CanvasFlow({ template, onTemplateImported }: CanvasProps) {
   const { nodes, edges, onNodesChange, onEdgesChange, onDelete } =
     useLiveblocksFlow<CanvasNode, CanvasEdge>({ suspense: true });
+  const room = useRoom();
+  const renderedEdges = useMemo(() => edges.map(normalizeEdge), [edges]);
   const { screenToFlowPosition, fitView } = useReactFlow();
   const dropCounter = useRef(0);
   const edgeCounter = useRef(0);
@@ -139,12 +171,7 @@ function CanvasFlow({ template, onTemplateImported }: CanvasProps) {
         sourceHandle: connection.sourceHandle,
         targetHandle: connection.targetHandle,
         data: { label: "" },
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          width: 16,
-          height: 16,
-          color: "var(--text-secondary)",
-        },
+        markerEnd: { ...DEFAULT_EDGE_MARKER },
       };
 
       edgeCounter.current += 1;
@@ -175,9 +202,10 @@ function CanvasFlow({ template, onTemplateImported }: CanvasProps) {
     [nodes, onNodesChange],
   );
 
-  // Templates replace the canvas instead of merging into it. Removes come
-  // before the template items in each change list, so Liveblocks applies the
-  // clear and the import in one synced mutation per collection.
+  // Templates replace the canvas instead of merging into it. Liveblocks'
+  // `onNodesChange` / `onEdgesChange` ignore `remove` changes, so deletion has
+  // to go through `onDelete`. `room.batch` groups the delete and both adds into
+  // one storage mutation, keeping the import atomic and undoable in one step.
   useEffect(() => {
     if (!template) {
       importedTemplateId.current = null;
@@ -190,32 +218,30 @@ function CanvasFlow({ template, onTemplateImported }: CanvasProps) {
 
     importedTemplateId.current = template.id;
 
-    onEdgesChange([
-      ...edges.map((edge) => ({ type: "remove" as const, id: edge.id })),
-      ...template.edges.map((edge) => ({
-        type: "add" as const,
-        item: {
-          ...edge,
-          data: { label: edge.data?.label ?? "" },
-          markerEnd:
-            edge.markerEnd && typeof edge.markerEnd === "object"
-              ? { ...edge.markerEnd }
-              : edge.markerEnd,
-        },
-      })),
-    ] satisfies EdgeChange<CanvasEdge>[]);
+    room.batch(() => {
+      onDelete({ nodes, edges });
 
-    onNodesChange([
-      ...nodes.map((node) => ({ type: "remove" as const, id: node.id })),
-      ...template.nodes.map((node) => ({
-        type: "add" as const,
-        item: {
-          ...node,
-          position: { ...node.position },
-          data: { ...node.data },
-        },
-      })),
-    ] satisfies NodeChange<CanvasNode>[]);
+      onEdgesChange(
+        template.edges.map((edge) => ({
+          type: "add" as const,
+          item: normalizeEdge({
+            ...edge,
+            data: { label: edge.data?.label ?? "" },
+          }),
+        })) satisfies EdgeChange<CanvasEdge>[],
+      );
+
+      onNodesChange(
+        template.nodes.map((node) => ({
+          type: "add" as const,
+          item: {
+            ...node,
+            position: { ...node.position },
+            data: { ...node.data },
+          },
+        })) satisfies NodeChange<CanvasNode>[],
+      );
+    });
 
     pendingFitNodeIds.current = template.nodes.map((node) => node.id);
     onTemplateImported?.();
@@ -225,6 +251,8 @@ function CanvasFlow({ template, onTemplateImported }: CanvasProps) {
     edges,
     onNodesChange,
     onEdgesChange,
+    onDelete,
+    room,
     onTemplateImported,
   ]);
 
@@ -277,7 +305,7 @@ function CanvasFlow({ template, onTemplateImported }: CanvasProps) {
         <CanvasEdgeActionsProvider updateEdgeLabel={updateEdgeLabel}>
           <ReactFlow
             nodes={nodes}
-            edges={edges}
+            edges={renderedEdges}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             onNodesChange={onNodesChange}

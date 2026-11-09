@@ -32,7 +32,6 @@ export function CanvasEdgeView({
   targetY,
   sourcePosition,
   targetPosition,
-  markerEnd,
   selected,
   data,
 }: EdgeProps<CanvasEdge>) {
@@ -83,9 +82,28 @@ export function CanvasEdgeView({
     : isHovered
       ? "var(--text-secondary)"
       : "var(--text-muted)";
+  // React Flow only exposes the rendered marker URL, not its color, so each
+  // state gets its own tiny marker whose fill follows the line.
+  const markerId = `canvas-edge-arrow-${id}-${selected ? "selected" : isHovered ? "hovered" : "idle"}`;
 
   return (
     <>
+      <defs>
+        <marker
+          id={markerId}
+          className="react-flow__arrowhead"
+          markerWidth={16}
+          markerHeight={16}
+          viewBox="-10 -10 20 20"
+          markerUnits="strokeWidth"
+          orient="auto-start-reverse"
+          refX={0}
+          refY={0}
+        >
+          <path d="M -5,-4 L 0,0 L -5,4 Z" fill={strokeColor} />
+        </marker>
+      </defs>
+
       <g
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
@@ -93,7 +111,7 @@ export function CanvasEdgeView({
       >
         <BaseEdge
           path={edgePath}
-          markerEnd={markerEnd}
+          markerEnd={`url(#${markerId})`}
           interactionWidth={24}
           style={{
             stroke: strokeColor,
@@ -108,6 +126,8 @@ export function CanvasEdgeView({
       <EdgeLabelRenderer>
         <div
           className="nodrag nopan nowheel absolute"
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
           style={{
             transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
             pointerEvents: isEditing || label ? "all" : "none",
