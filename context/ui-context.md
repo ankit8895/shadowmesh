@@ -69,7 +69,12 @@ Default node color: `#1F1F1F` with `#EDEDED` text.
 
 ### Edge Style
 
-Smooth-step path with an arrow marker. Default edge color: `#f8fafc`. Stroke width is thin — edges are visually secondary to nodes.
+Custom `canvasEdge` renderer: smooth-step right-angle path with a closed arrow
+marker. The 1.5px stroke has rounded ends and is dimmed to `--text-muted` at
+rest, brightening to `--text-secondary` on hover and `--text-primary` when
+selected. An invisible 24px interaction stroke widens the click target without
+changing the visible thickness. Edges carry an optional inline label pill at the
+path midpoint; double-clicking an edge edits the label in place.
 
 ### Node Shapes
 
@@ -126,6 +131,7 @@ matos-ui surfaces lift along an eight-step ladder instead of using a single card
 ## Layout Patterns
 
 - Editor workspace: full-viewport layout — floating sidebar overlay on the left, center canvas, slide-over AI sidebar on the right. The `/editor` home state centers a minimal column (heading, one-line description, primary button) inside the canvas area — no card wrapper. Below `lg`, an open sidebar renders a backdrop scrim that closes it when tapped. The project list highlights the open room with `bg-accent-dim` / `text-brand` and `aria-current="page"`. A project the viewer cannot open renders the shared `AccessDenied` panel (lock chip, short message, link back to `/editor`) instead of the workspace.
+- Workspace navbar actions include `Templates`, which opens a `StackedDialog` with a scrollable grid of predefined starter templates. Each card shows a lightweight, bounds-fitted diagram preview plus its name and description; importing replaces the whole canvas and closes the dialog.
 - Sidebars: floating overlay with dark semi-transparent background and subtle border.
 - Modals and dialogs: centered overlay, `rounded-3xl`, dark background with backdrop blur.
 - Navbar: top bar with dark background and bottom border.

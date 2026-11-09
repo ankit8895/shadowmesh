@@ -9,18 +9,25 @@ import { RefreshCwIcon } from "lucide-animated";
 import { Component, type ReactNode } from "react";
 
 import { Canvas } from "@/components/editor/canvas";
+import type { CanvasTemplate } from "@/components/editor/starter-templates";
 import { Button } from "@/components/matos-ui/button";
 
 export interface CanvasRoomProps {
   /** The project ID doubles as the Liveblocks room ID. */
   roomId: string;
+  template?: CanvasTemplate | null;
+  onTemplateImported?: () => void;
 }
 
 /**
  * Opens the Liveblocks room for a project and renders the canvas inside it.
  * The page stays server-side; only this subtree talks to Liveblocks.
  */
-export function CanvasRoom({ roomId }: CanvasRoomProps) {
+export function CanvasRoom({
+  roomId,
+  template,
+  onTemplateImported,
+}: CanvasRoomProps) {
   return (
     <LiveblocksErrorBoundary>
       <LiveblocksProvider authEndpoint="/api/liveblocks-auth">
@@ -33,7 +40,10 @@ export function CanvasRoom({ roomId }: CanvasRoomProps) {
           initialPresence={{ cursor: null, isThinking: false }}
         >
           <ClientSideSuspense fallback={<CanvasLoading />}>
-            <Canvas />
+            <Canvas
+              template={template}
+              onTemplateImported={onTemplateImported}
+            />
           </ClientSideSuspense>
         </RoomProvider>
       </LiveblocksProvider>
