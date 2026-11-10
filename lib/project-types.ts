@@ -6,7 +6,6 @@ export interface ProjectSummary {
   name: string;
   description: string | null;
   status: ProjectStatus;
-  canvasJsonPath: string | null;
   createdAt: Date;
   updatedAt: Date;
 }

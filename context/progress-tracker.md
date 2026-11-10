@@ -34,6 +34,12 @@ change.
   (`context/feature-specs/17-canvas-ergonomics.md`)
 - Complete — Feature 18: Starter Template
   (`context/feature-specs/18-starter-template.md`)
+- Complete — Feature 19: Presence Avatars & Cursor
+  (`context/feature-specs/19-presence-avatars-cursor.md`)
+- Complete — Feature 20: AI Sidebar Shell
+  (`context/feature-specs/20-ai-sidebar-shell.md`)
+- Complete — Feature 21: Canvas Autosave
+  (`context/feature-specs/21-canvas-autosave.md`)
 - Replace `lucide-react` with `lucide-animated` across the entire project.
   All icon imports updated to use `lucide-animated` names (with `Icon` suffix).
 - UI updated to match the 50/50 split-screen sign-in layout: teal-tinted left
@@ -55,7 +61,7 @@ change.
 
 ## Current Goal
 
-- Feature 18 complete. The next feature is not specified yet.
+- Feature 21 complete. The next feature is not specified yet.
 
 ## Completed
 
@@ -278,7 +284,7 @@ change.
     listed as dynamic.
 - Feature 10: Liveblocks Setup (`context/feature-specs/10-liveblocks-setup.md`).
   - `liveblocks.config.ts` now types the global `Liveblocks` namespace:
-    `Presence` holds `cursor` (`{ x, y }` or `null`) and `isThinking`, and
+    `Presence` holds `cursor` (`{ x, y }` or `null`) and `thinking`, and
     `UserMeta` holds the Clerk user ID plus `info.name`, `info.avatar` and
     `info.cursorColor`.
   - `lib/liveblocks.ts` exports `getLiveblocks()`, the cached
@@ -315,7 +321,7 @@ change.
   - `components/editor/canvas-room.tsx` is the client room wrapper:
     `LiveblocksProvider authEndpoint="/api/liveblocks-auth"`, `RoomProvider`
     with the project ID as room ID and initial presence
-    `{ cursor: null, isThinking: false }`, and `ClientSideSuspense` with a loading
+    `{ cursor: null, thinking: false }`, and `ClientSideSuspense` with a loading
     state. A small error boundary around the providers catches failed handshakes
     (which `ClientSideSuspense` does not) and renders a retry panel.
   - `components/editor/canvas.tsx` binds React Flow to the room with
@@ -475,6 +481,83 @@ change.
     Batching makes the whole replace one storage mutation and one undo step.
     The view fits once the new nodes reach the synced `nodes` prop.
   - Checks: `npx tsc --noEmit`, `npx eslint` on every touched file and
+    `NODE_ENV=production npm run build` pass.
+- Feature 19: Presence Avatars & Cursor
+  (`context/feature-specs/19-presence-avatars-cursor.md`).
+  - `liveblocks.config.ts` now defines Presence as `cursor`
+    (`{ x, y } | null`) and `thinking`; `CanvasRoom` initializes both and the
+    previously named `isThinking` field was renamed.
+  - `components/editor/presence-avatars.tsx` renders the canvas-only avatar
+    group in the top-right corner. It reads the Clerk user ID with `useAuth`,
+    excludes that ID from `useOthers`, deduplicates a user's multiple
+    connections, and shows up to five 32px avatars with a `+N` overflow chip.
+    Profile photos are used when present, initials otherwise, and a divider
+    appears only when at least one collaborator is present. The current user
+    appears separately through Clerk's `UserButton`, sized to 32px to match.
+  - `components/editor/presence-cursors.tsx` renders other participants'
+    cursors through React Flow's `ViewportPortal`; each is a colored pointer
+    with a name badge, positioned from the participant's presence `cursor` and
+    inverse-scaled so it stays a constant screen size.
+  - `CanvasFlow` broadcasts the local cursor with `useUpdateMyPresence` on
+    React Flow's `onMouseMove`, clearing it on `onMouseLeave`, and mounts the
+    avatar group above the canvas. The navbar and editor home are untouched.
+  - Checks: `npx tsc --noEmit`, targeted `npx eslint` and
+    `NODE_ENV=production npm run build` pass.
+- Feature 20: AI Sidebar Shell (`context/feature-specs/20-ai-sidebar-shell.md`).
+  - Rebuilt `components/editor/ai-sidebar.tsx` as the floating AI workspace
+    shell while preserving the parent-owned open state, right slide-in spring,
+    fixed positioning, border and shadow. The surface now uses `bg-base/95`.
+  - Header: bot icon, `AI Workspace` title, `Collaborate with Shadowmesh`
+    subtitle and a right-aligned close button.
+  - Tabs use the installed Radix `Tabs` primitive (the same primitive shadcn
+    wraps) because the project intentionally does not install the shadcn tabs
+    file. AI Architect is the default; active tabs use `bg-brand-dim` /
+    `text-brand`, inactive tabs use `text-copy-muted`.
+  - AI Architect: scrollable chat area, empty state with bot art and three
+    starter prompt pills, right-aligned user bubbles, left-aligned assistant
+    bubbles, and a local-only send form. The textarea auto-resizes from 72px to
+    160px; Enter sends and Shift+Enter keeps the newline. Sending appends a
+    local user message only, with no backend or AI call.
+  - Specs: accent `Generate Spec` button and a static demo spec card with a
+    file icon, title, snippet and disabled download action.
+  - Token mapping: `text-copy-primary` / `text-copy-muted` for title and
+    subtitle, `bg-brand` + `text-primary-foreground` for accent actions,
+    `bg-brand-dim` / `text-brand` for active tabs, `bg-subtle` + `text-ai-text`
+    for starter pills, and `bg-elevated` / `border-surface-border` for cards.
+  - Checks: `npx tsc --noEmit`, targeted `npx eslint` and
+    `NODE_ENV=production npm run build` pass.
+- Feature 21: Canvas Autosave
+  (`context/feature-specs/21-canvas-autosave.md`).
+  - `@vercel/blob` added. `lib/canvas-store.ts` uploads the canvas JSON to the
+    stable path `canvas/{projectId}.json` (overwrite enabled, no random
+    suffix) and writes the returned blob URL to `Project.canvasJsonPath`;
+    loading reads that URL from Prisma and fetches the JSON back from Blob.
+    Prisma never stores the canvas itself.
+  - `lib/canvas-snapshot.ts` owns the persisted `{ nodes, edges }` contract.
+    Saving strips React Flow's transient interaction fields (`selected`,
+    `dragging`, `measured`, …), and parsing rebuilds every node and edge from
+    validated fields for both blob reads and PUT request bodies.
+  - `app/api/projects/[projectId]/canvas/route.ts`: `GET` returns
+    `{ canvas }` (`null` before the first save) and `PUT` validates the body
+    and saves. Both authorize through `authorizeProjectAccess`, so owners and
+    invited collaborators can save; `/api` stays exempt from `proxy.ts`, so
+    the routes answer with JSON 401/404/400/500 errors themselves.
+  - `hooks/use-canvas-autosave.ts` watches the room's nodes and edges, debounces
+    saves (1.2s), skips the baseline snapshot, and exposes
+    `idle | pending | saving | saved | error` status plus a manual `save` that
+    bypasses the debounce. Dirty checks are throttled, manual saves are ignored
+    until restore settles, and `pagehide` / unmount flush the latest snapshot
+    with `keepalive`.
+  - `CanvasFlow` loads the saved canvas only when the room has no nodes or
+    edges at load time, re-checks the room before applying, adds the snapshot
+    through `room.batch`, and then fits the view. A room that already has
+    content skips the load entirely. Autosave starts only after the restore
+    attempt settles, so the loaded canvas is never written back immediately.
+  - `WorkspaceShell` gained a Save button in the navbar with the live status
+    indicator (`Save` / `Unsaved` / `Saving…` / `Saved` / `Save failed`), wired
+    to the canvas through `onSaveStatusChange`, `onReadyChange` and a save-action
+    ref. The button stays disabled until the restore attempt settles.
+  - Checks: `npx tsc --noEmit`, targeted `npx eslint` and
     `NODE_ENV=production npm run build` pass.
 - Project list navigation: each row in `components/editor/project-list.tsx` is a
   `next/link` to `/editor/{projectId}`, so the sidebar opens owned and shared
@@ -678,9 +761,124 @@ change.
   from node positions and sizes, edges are straight centre-to-centre lines, and
   nodes reuse `NodeShape` inside a scaled container, so previews stay cheap and
   cannot drift from the real shape visuals.
+- Presence UI lives inside the canvas, not the shared navbar: collaborator
+  avatars come from `useOthers` filtered by the Clerk session ID, while the
+  current user keeps Clerk's `UserButton`. Avatars are display-only and deduped
+  by user ID, so multiple tabs from one collaborator produce one avatar.
+- Cursor positions are stored in canvas coordinates in Liveblocks Presence.
+  `CanvasFlow` writes them from React Flow's mouse handlers, and
+  `PresenceCursors` renders other connections through `ViewportPortal` with an
+  inverse zoom, so cursors track panning and zooming without scaling.
+- The AI sidebar is a UI shell: open state stays in `WorkspaceShell`, while
+  `AiSidebar` owns only tab and draft/message state. Chat sends append local
+  user messages; no AI, Liveblocks or API calls are involved yet.
+- Tabs in the AI sidebar use the Radix `Tabs` primitive from the already
+  installed `radix-ui` package. The project keeps matos-ui for its published
+  tab component and deliberately does not install the shadcn tabs file, so
+  importing the primitive here avoids adding a duplicate tab implementation.
+- The AI sidebar maps the spec's generic color names onto existing project
+  tokens (`brand`, `brand-dim`, `ai-text`, `copy-primary`, `copy-muted`,
+  `elevated`, `subtle`) rather than introducing literals.
+- The workspace navbar only gained the Save status button; the canvas-only
+  presence group is still intentionally separate from the navbar actions and
+  from the home route. The workspace reuses its `WorkspaceUserMenu` while the
+  room is connecting or failed, and the group steps left of the open AI
+  sidebar on `lg`, so the account menu stays reachable.
+- Canvas persistence splits storage by responsibility: Vercel Blob holds the
+  `{ nodes, edges }` JSON at `canvas/{projectId}.json`, while Prisma holds only
+  the project metadata and the blob URL in `canvasJsonPath`. The URL is the
+  source of truth for loading, so a save never needs to scan Blob.
+- The saved canvas only seeds a room that is empty. If the Liveblocks room
+  already has nodes or edges, the load is skipped and the room is never
+  overwritten; the room is re-checked after the fetch too, in case another
+  collaborator filled it while the request was in flight.
+- Autosave is a client hook fed by the room's synced nodes and edges, not by
+  React Flow's local store. It debounces 1.2s, treats the first enabled
+  snapshot as a baseline, and only starts after the restore attempt settles,
+  which keeps opening or loading a canvas from triggering a save.
+- The navbar Save button reflects the hook's status and calls the same save
+  function manually. Status is lifted to `WorkspaceShell` through a callback,
+  and the save action is registered in a ref so the navbar does not need to
+  know about the canvas internals.
+- Canvas JSON is validated on both sides of the boundary: `parseCanvasSnapshot`
+  rebuilds nodes and edges from known fields, so malformed blob content or a
+  crafted PUT body can never inject unexpected node/edge properties.
 
 ## Session Notes
 
+- Entry 2026-11-10 (review fixes — autosave, presence, snapshot):
+  - Manual saves are ignored until the restore attempt settles and the navbar
+    Save button stays disabled, so clicking early can no longer overwrite the
+    saved canvas with the still-empty room.
+  - Restore also settles after a 3s fallback, so a restored node deleted by
+    another client before sync cannot keep autosave off for the session.
+  - The autosave hook reports `pending` ("Unsaved") while changes wait for the
+    debounce, throttles its dirty check, and flushes the latest snapshot on
+    `pagehide` and unmount with `keepalive`.
+  - Restored nodes are added before edges, and snapshots no longer persist
+    `markerEnd`; the renderer always supplies the arrow marker.
+  - `ProjectSummary` and the project select no longer include `canvasJsonPath`,
+    so the private Blob URL stays server-side. The project row is only rewritten
+    when the stored URL changes.
+  - The workspace renders the shared account menu while the room is connecting
+    or failed, and the presence group steps left of the open AI sidebar on
+    `lg`. The stale navbar comment was corrected.
+  - Checks: `npx tsc --noEmit`, targeted `npx eslint` and
+    `NODE_ENV=production npm run build` pass.
+
+- Entry 2026-11-10 (review fix — workspace navbar user menu):
+  - `EditorNavbar` gains `showUserButton` (default `true`), so the shared navbar
+    keeps Clerk's `UserButton` on the editor home and omits it in the project
+    workspace, where the canvas presence cluster already renders the user menu.
+  - `WorkspaceShell` passes `showUserButton={false}`; editor home, canvas
+    rendering, autosave, presence and collaboration behavior are unchanged.
+  - Checks: `npx tsc --noEmit`, targeted `npx eslint` and
+    `NODE_ENV=production npm run build` pass.
+
+- Entry 2026-11-10 (Feature 21 — canvas autosave):
+  - Installed `@vercel/blob` (2.9.0) and added `lib/canvas-store.ts`,
+    `lib/canvas-snapshot.ts`, `app/api/projects/[projectId]/canvas/route.ts`
+    and `hooks/use-canvas-autosave.ts`.
+  - `CanvasFlow` restores a saved snapshot only into an empty room, applies it
+    in one `room.batch`, and fits the view once the restored nodes reach the
+    synced `nodes` prop. A non-empty room skips loading.
+  - `WorkspaceShell` renders the navbar Save button with the autosave status;
+    clicking it saves immediately.
+  - The Blob store is private: `put` uses `access: "private"` and loads go
+    through the SDK's `get()` (with `useCache: false`) instead of `fetch()`,
+    which cannot authenticate against a private blob URL.
+  - `@vercel/blob` needs `BLOB_READ_WRITE_TOKEN` in the environment (Vercel Blob
+    store token). It is not part of the repository; a local run or deployment
+    without it returns the route's 500 error when saving.
+  - `npx tsc --noEmit`, targeted `npx eslint` and
+    `NODE_ENV=production npm run build` pass.
+
+- Entry 2026-11-09 (Feature 20 — AI sidebar shell):
+  - Completed `components/editor/ai-sidebar.tsx`: AI Workspace header, Radix
+    tabs for AI Architect and Specs, empty chat state with three starter
+    prompts, local user-message rendering, auto-resizing composer, and a static
+    demo spec card with a disabled download action.
+  - Preserved the existing floating position and slide-in/exit animation;
+    changed the surface to `bg-base/95` and kept the border/shadow treatment.
+  - No backend, Liveblocks or AI generation logic was added; the composer only
+    appends local user messages.
+  - Checks: `npx tsc --noEmit`, targeted `npx eslint` and
+    `NODE_ENV=production npm run build` pass.
+- Entry 2026-11-09 (Feature 19 — presence avatars and cursors):
+  - Renamed the Presence `isThinking` field to `thinking` and updated the
+    canvas room's initial presence.
+  - Added `components/editor/presence-avatars.tsx` and
+    `components/editor/presence-cursors.tsx`, mounted in `CanvasFlow`, so
+    collaborator avatars and live cursors appear only in the project canvas.
+  - Avatars use Clerk's active user ID to exclude the current user, dedupe
+    connections, show up to five photos/initial avatars with a `+N` chip, and
+    end with the current user's `UserButton`. The divider only renders when a
+    collaborator is present.
+  - Cursors are broadcast from React Flow's `onMouseMove` and cleared on
+    `onMouseLeave`; other participants' pointers render in canvas coordinates
+    with their presence color and name badge.
+  - Checks: `npx tsc --noEmit`, targeted `npx eslint` and
+    `NODE_ENV=production npm run build` pass.
 - Entry 2026-11-09 (review fixes — template replacement and polish):
   - Fixed template imports to replace the canvas through `onDelete` inside
     `room.batch`; the previous `remove` changes were silently ignored by

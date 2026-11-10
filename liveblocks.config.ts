@@ -8,7 +8,7 @@ declare global {
       // Pointer position in canvas coordinates, or null when off-canvas.
       cursor: { x: number; y: number } | null;
       // True while this user's AI agent is generating on the canvas.
-      isThinking: boolean;
+      thinking: boolean;
     };
 
     // Identity attached when the auth route issues a session token.

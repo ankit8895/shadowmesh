@@ -97,6 +97,25 @@ Small white circular handles, hidden by default, revealed on node hover. Appear 
 
 React Flow `<Background>` component. Canvas sits on the base background color.
 
+### Presence
+
+A display-only collaborator avatar group sits in the canvas top-right corner,
+separate from the workspace navbar. Up to five 32px avatars overlap in a stack
+with a `+N` chip for overflow; missing photos fall back to initials, and every
+avatar has a subtle ring against the canvas. The divider and the Clerk
+`UserButton` follow the avatars, and the divider appears only when at least one
+collaborator is present. The current user is shown by that `UserButton`, never
+by a duplicate presence avatar. The workspace navbar omits the Clerk
+`UserButton` so the menu is not shown twice; the shared `EditorNavbar` keeps it
+for the editor home. While the room is connecting or fails to connect,
+`WorkspaceShell` renders the same account menu in the canvas corner so it stays
+reachable, and the avatar group steps left of the open AI sidebar on `lg`
+instead of sitting underneath it.
+
+Other participants' cursors render as small colored pointers with a name badge,
+using each participant's presence color. Cursors follow the canvas coordinate
+system while keeping a constant screen size.
+
 ## Component Library
 
 matos-ui on top of Tailwind. No custom design system.
@@ -116,6 +135,7 @@ Installed primitives:
 - matos-ui source components live in `components/matos-ui/` (their registry target).
 - shadcn/ui primitives live in `components/ui/`.
 - Card, dialog and tabs are the matos-ui implementations above. shadcn's `card`, `dialog` and `tabs` are intentionally not installed — do not add or import them.
+- The AI Workspace sidebar imports the Radix `Tabs` primitive directly from `radix-ui` for its compact full-height tab layout. `MotionTabs` remains the default for standalone tabbed surfaces; the shadcn tabs file stays uninstalled.
 - Add new components with the shadcn CLI (`npx shadcn add @matos/<name>` for matos-ui items, or the default shadcn registry for primitives matos-ui does not publish).
 - Generated component files are protected — do not edit them after installation.
 - `lib/utils.ts` exports the shared `cn()` helper for project code. Generated components import the `cn` package directly.
@@ -133,7 +153,13 @@ matos-ui surfaces lift along an eight-step ladder instead of using a single card
 ## Layout Patterns
 
 - Editor workspace: full-viewport layout — floating sidebar overlay on the left, center canvas, slide-over AI sidebar on the right. The `/editor` home state centers a minimal column (heading, one-line description, primary button) inside the canvas area — no card wrapper. Below `lg`, an open sidebar renders a backdrop scrim that closes it when tapped. The project list highlights the open room with `bg-accent-dim` / `text-brand` and `aria-current="page"`. A project the viewer cannot open renders the shared `AccessDenied` panel (lock chip, short message, link back to `/editor`) instead of the workspace.
+- AI Workspace sidebar: floating `bg-base/95` panel with the existing right-side slide animation. Header shows a bot chip, `AI Workspace` / `Collaborate with Shadowmesh`, and a close button. Two tabs (`AI Architect`, `Specs`) use `bg-brand-dim` / `text-brand` when active and `text-copy-muted` otherwise. The chat tab has a scrollable empty state with three starter pills, user bubbles on `bg-brand-dim` with a `border-brand/50` border, assistant bubbles on `bg-elevated` with `text-ai-text`, and an auto-growing composer. The Specs tab has a full-width accent `Generate Spec` button and a static elevated spec card with a disabled download action.
 - Workspace navbar actions include `Templates`, which opens a `StackedDialog` with a scrollable grid of predefined starter templates. Each card shows a lightweight, bounds-fitted diagram preview (240×132 maximum, shrinking with the card) plus its name and description; importing replaces the whole canvas and closes the dialog.
+- Workspace navbar actions also include a `Save` button that doubles as the
+  canvas autosave indicator: it reads `Save`, `Unsaved`, `Saving…`, `Saved` or
+  `Save failed`, turns the label `text-success` / `text-error` for the last two
+  states, saves immediately when clicked, and stays disabled until the restore
+  attempt settles so it cannot persist the empty room over the saved canvas.
 - Sidebars: floating overlay with dark semi-transparent background and subtle border.
 - Modals and dialogs: centered overlay, `rounded-3xl`, dark background with backdrop blur.
 - Navbar: top bar with dark background and bottom border.
