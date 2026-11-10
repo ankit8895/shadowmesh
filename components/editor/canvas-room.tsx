@@ -8,7 +8,7 @@ import {
 import { RefreshCwIcon } from "lucide-animated";
 import { Component, type ReactNode } from "react";
 
-import { Canvas } from "@/components/editor/canvas";
+import { Canvas, type CanvasProps } from "@/components/editor/canvas";
 import type { CanvasTemplate } from "@/components/editor/starter-templates";
 import { Button } from "@/components/matos-ui/button";
 
@@ -17,6 +17,9 @@ export interface CanvasRoomProps {
   roomId: string;
   template?: CanvasTemplate | null;
   onTemplateImported?: () => void;
+  onSaveStatusChange?: CanvasProps["onSaveStatusChange"];
+  onReadyChange?: CanvasProps["onReadyChange"];
+  saveCanvasRef?: CanvasProps["saveCanvasRef"];
 }
 
 /**
@@ -27,6 +30,9 @@ export function CanvasRoom({
   roomId,
   template,
   onTemplateImported,
+  onSaveStatusChange,
+  onReadyChange,
+  saveCanvasRef,
 }: CanvasRoomProps) {
   return (
     <LiveblocksErrorBoundary>
@@ -37,12 +43,16 @@ export function CanvasRoom({
         <RoomProvider
           key={roomId}
           id={roomId}
-          initialPresence={{ cursor: null, isThinking: false }}
+          initialPresence={{ cursor: null, thinking: false }}
         >
           <ClientSideSuspense fallback={<CanvasLoading />}>
             <Canvas
+              projectId={roomId}
               template={template}
               onTemplateImported={onTemplateImported}
+              onSaveStatusChange={onSaveStatusChange}
+              onReadyChange={onReadyChange}
+              saveCanvasRef={saveCanvasRef}
             />
           </ClientSideSuspense>
         </RoomProvider>

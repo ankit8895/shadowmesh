@@ -1,13 +1,16 @@
 import type { AuthenticatedViewer } from "@/lib/project-access";
 import { prisma } from "@/lib/prisma";
 
-/** The project fields returned by the API. Owner IDs stay server-side. */
+/**
+ * The project fields returned by the API. Owner IDs and the blob URL stay
+ * server-side: the saved canvas is read through its own API route, so clients
+ * never need the private Blob URL.
+ */
 const projectSummarySelect = {
   id: true,
   name: true,
   description: true,
   status: true,
-  canvasJsonPath: true,
   createdAt: true,
   updatedAt: true,
 } as const;

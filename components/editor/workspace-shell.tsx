@@ -1,7 +1,12 @@
 "use client";
 
-import { LayoutGridIcon, SparklesIcon, UsersIcon } from "lucide-animated";
-import { useState } from "react";
+import {
+  CloudUploadIcon,
+  LayoutGridIcon,
+  SparklesIcon,
+  UsersIcon,
+} from "lucide-animated";
+import { useRef, useState } from "react";
 
 import { AiSidebar } from "@/components/editor/ai-sidebar";
 import { CanvasRoom } from "@/components/editor/canvas-room";
@@ -9,13 +14,16 @@ import { CreateProjectDialog } from "@/components/editor/create-project-dialog";
 import { DeleteProjectDialog } from "@/components/editor/delete-project-dialog";
 import { EditorNavbar } from "@/components/editor/editor-navbar";
 import { ProjectSidebar } from "@/components/editor/project-sidebar";
+import { WorkspaceUserMenu } from "@/components/editor/presence-avatars";
 import { RenameProjectDialog } from "@/components/editor/rename-project-dialog";
 import { ShareProjectDialog } from "@/components/editor/share-project-dialog";
 import { StarterTemplatesModal } from "@/components/editor/starter-templates-modal";
 import type { CanvasTemplate } from "@/components/editor/starter-templates";
 import { Button } from "@/components/matos-ui/button";
+import type { CanvasSaveStatus } from "@/hooks/use-canvas-autosave";
 import { useProjectActions } from "@/hooks/use-project-actions";
 import type { ProjectSummary } from "@/lib/project-types";
+import { cn } from "@/lib/utils";
 
 export interface WorkspaceShellProps {
   project: ProjectSummary;
@@ -27,8 +35,8 @@ export interface WorkspaceShellProps {
 
 /**
  * Full-viewport workspace for a single project: navbar, project sidebar,
- * collaborative canvas and AI sidebar. The canvas opens the project's
- * Liveblocks room; the AI chat is still a placeholder.
+ * collaborative canvas and AI workspace sidebar. The canvas opens the
+ * project's Liveblocks room; the AI sidebar is a UI shell for now.
  */
 export function WorkspaceShell({
   project,
@@ -43,7 +51,22 @@ export function WorkspaceShell({
   const [pendingTemplate, setPendingTemplate] = useState<CanvasTemplate | null>(
     null,
   );
+  const [canvasSaveStatus, setCanvasSaveStatus] =
+    useState<CanvasSaveStatus>("idle");
+  const [isCanvasReady, setIsCanvasReady] = useState(false);
+  const saveCanvasRef = useRef<(() => Promise<void>) | null>(null);
   const actions = useProjectActions({ activeProjectId: project.id });
+
+  const saveLabel =
+    canvasSaveStatus === "saving"
+      ? "Saving…"
+      : canvasSaveStatus === "pending"
+        ? "Unsaved"
+        : canvasSaveStatus === "saved"
+          ? "Saved"
+          : canvasSaveStatus === "error"
+            ? "Save failed"
+            : "Save";
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) actions.closeDialog();
@@ -55,8 +78,28 @@ export function WorkspaceShell({
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={() => setIsSidebarOpen((isOpen) => !isOpen)}
         title={project.name}
+        showUserButton={false}
         actions={
           <>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="gap-2"
+              disabled={!isCanvasReady || canvasSaveStatus === "saving"}
+              onClick={() => void saveCanvasRef.current?.()}
+            >
+              <CloudUploadIcon size={16} aria-hidden="true" />
+              <span
+                aria-live="polite"
+                className={cn(
+                  canvasSaveStatus === "saved" && "text-success",
+                  canvasSaveStatus === "error" && "text-error",
+                )}
+              >
+                {saveLabel}
+              </span>
+            </Button>
             <Button
               type="button"
               variant="ghost"
@@ -94,12 +137,29 @@ export function WorkspaceShell({
         }
       />
 
-      <main className="relative min-h-0 flex-1 overflow-hidden bg-base">
+      <main
+        data-slot="workspace-main"
+        data-ai-open={isAiSidebarOpen}
+        className="group relative min-h-0 flex-1 overflow-hidden bg-base"
+      >
         <CanvasRoom
           roomId={project.id}
           template={pendingTemplate}
           onTemplateImported={() => setPendingTemplate(null)}
+          onSaveStatusChange={setCanvasSaveStatus}
+          onReadyChange={setIsCanvasReady}
+          saveCanvasRef={saveCanvasRef}
         />
+
+        {/* The canvas owns the account menu once it loads; until then this
+            fallback keeps it reachable during connecting and error states. */}
+        {isCanvasReady ? null : (
+          <div className="pointer-events-none absolute top-4 right-4 z-20">
+            <div className="pointer-events-auto">
+              <WorkspaceUserMenu />
+            </div>
+          </div>
+        )}
       </main>
 
       <ProjectSidebar

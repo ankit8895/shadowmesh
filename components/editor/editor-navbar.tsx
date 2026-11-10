@@ -13,6 +13,11 @@ export interface EditorNavbarProps {
   title?: string;
   /** Extra actions rendered next to the user menu. */
   actions?: ReactNode;
+  /**
+   * Clerk's `UserButton` is on by default for the project home. The workspace
+   * turns it off because the canvas presence cluster already owns the user menu.
+   */
+  showUserButton?: boolean;
 }
 
 export function EditorNavbar({
@@ -20,6 +25,7 @@ export function EditorNavbar({
   onToggleSidebar,
   title,
   actions,
+  showUserButton = true,
 }: EditorNavbarProps) {
   return (
     <header
@@ -59,7 +65,7 @@ export function EditorNavbar({
 
       <div className="flex flex-1 items-center justify-end gap-1">
         {actions}
-        <UserButton />
+        {showUserButton ? <UserButton /> : null}
       </div>
     </header>
   );
