@@ -40,6 +40,16 @@ change.
   (`context/feature-specs/20-ai-sidebar-shell.md`)
 - Complete — Feature 21: Canvas Autosave
   (`context/feature-specs/21-canvas-autosave.md`)
+- Complete — Feature 22: Design Agent API
+  (`context/feature-specs/22-design-agent-api.md`)
+- Complete — Feature 23: Design Agent Logic
+  (`context/feature-specs/23-design-agent-logic.md`)
+- Complete — Feature 24: AI Presence State
+  (`context/feature-specs/24-ai-presence-state.md`)
+- Complete — Feature 25: Sidebar Chat Feed
+  (`context/feature-specs/25-sidebar-chat-feed.md`)
+- Complete — Feature 26: Design Agent Frontend
+  (`context/feature-specs/26-design-agent-frontend.md`)
 - Replace `lucide-react` with `lucide-animated` across the entire project.
   All icon imports updated to use `lucide-animated` names (with `Icon` suffix).
 - UI updated to match the 50/50 split-screen sign-in layout: teal-tinted left
@@ -61,7 +71,7 @@ change.
 
 ## Current Goal
 
-- Feature 21 complete. The next feature is not specified yet.
+- Feature 26 complete. The AI sidebar starts design runs, follows them with `useRealtimeRun`, and posts the result back into `ai-chat`.
 
 ## Completed
 
@@ -565,13 +575,153 @@ change.
   link's `::after` layer stretches over the row, while the rename and delete
   buttons sit above it.
 
+- Feature 22: Design Agent API (`context/feature-specs/22-design-agent-api.md`).
+  - `prisma/models/task-run.prisma` adds `TaskRun` (`cuid` `id`, unique `runId`,
+    `projectId` with a cascade-delete relation to `Project`, `userId`,
+    `createdAt`) with an index on `runId` and a compound `userId` /
+    `projectId` index. Migration
+    `prisma/migrations/20261111130511_add_task_run` applies it.
+  - `trigger/design-agent.ts` exports the minimal `design-agent` task: it
+    accepts `{ prompt, roomId }`, logs the request with the prompt length and
+    echoes both fields back. It reuses the existing `trigger.config.ts`
+    (`dirs: ["trigger"]`, node-24 runtime); no AI provider, nodes or edges.
+  - `POST /api/ai/design` parses `{ prompt, projectId, roomId }`, authorizes
+    the project through `authorizeProjectAccess`, triggers `design-agent` by
+    ID with a type-only import, stores a `TaskRun` row and answers
+    `201 { runId }`. Owners and collaborators can both start a run.
+  - `POST /api/ai/design/token` requires a signed-in caller, reads the run by
+    `runId`, rejects a run started by another user (`403`, `404` when the run
+    is unknown) and returns `{ token }`: a Trigger.dev public token scoped to
+    `read.runs: [runId]` with a one-hour expiry.
+  - `lib/design-input.ts` owns both request parsers and enforces the
+    project-ID-is-room-ID invariant, so a run cannot be pointed at a room
+    other than the authorized project. `lib/project-input.ts` now exports
+    `readJsonObject`, `ROOM_ID_PATTERN` and `MAX_ROOM_ID_LENGTH` for reuse.
+  - `lib/task-runs.ts` holds the two Prisma calls (`createTaskRun`,
+    `findTaskRun`); run rows are never exposed to the client.
+  - Checks: `npx tsc --noEmit`, targeted `npx eslint` and `npm run build`.
+
+- Feature 23: Design Agent Logic
+  (`context/feature-specs/23-design-agent-logic.md`).
+  - `trigger/design-agent.ts` now runs the real agent: it publishes a running
+    status, reads the room canvas for context, asks Gemini
+    (`gemini-2.5-flash`) for a JSON design plan, validates it with
+    `parseAiDesignPlan`, applies it to Storage, and reports completion or
+    failure. Presence is cleared in a `finally`, so a failed run never leaves
+    the AI stuck on the canvas.
+  - `lib/ai-canvas.ts` owns the `AiDesignOperation` union (addNode, moveNode,
+    resizeNode, updateNode, deleteNode, addEdge, deleteEdge), validation of
+    the model plan (shape and colour must come from `NODE_SHAPES` /
+    `NODE_COLORS`, sizes and labels are clamped, IDs are slugified, at most
+    24 operations) and the layout rules (20px grid, 40px minimum gap, overlap
+    pushed down through `placeNewNode`).
+  - `trigger/design-room.ts` is the server-side canvas layer. It reads the
+    diagram with `getStorageDocument(roomId, "json")`, applies the whole plan
+    in one `mutateStorage` batch using the same `LiveObject` / `LiveMap`
+    layout `@liveblocks/react-flow` owns (`flow` -> `nodes` / `edges`), and
+    creates the `flow` key when a task runs before any client opened the room.
+  - AI presence uses the Liveblocks server presence API
+    (`setPresence(roomId, { userId: "shadowmesh-ai", data, userInfo, ttl })`),
+    so the existing `PresenceCursors` / `PresenceAvatars` render the agent
+    with a cursor and `thinking: true` while it works; `clearAiPresence`
+    drops it with a two-second TTL when the run ends.
+  - Superseded by Feature 24: status is published to the room's
+    `ai-status-feed` Liveblocks feed instead of an `ai` Storage key, and the
+    canvas overlay (`components/editor/ai-activity-feed.tsx`) was removed.
+  - `AiSidebar` now takes the project ID and posts prompts to
+    `POST /api/ai/design` (the project ID is the room ID), appending the API
+    error or a confirmation to the chat; the workspace passes `project.id`.
+  - `lib/canvas-drag.ts` exports its size table as `NODE_SHAPE_SIZES` and
+    uses relative type imports, so the agent normalizes generated node sizes
+    from the same table the shape panel uses and the Trigger bundle does not
+    rely on tsconfig path resolution.
+  - Checks: `npx tsc --noEmit`, targeted `npx eslint` and `npm run build`.
+
+- Feature 24: AI Presence State
+  (`context/feature-specs/24-ai-presence-state.md`).
+  - `types/tasks.ts` owns the shared task contract: `AI_STATUS_FEED_ID`
+    (`ai-status-feed`), `AiTaskStatus`, `AiTaskKind`, the
+    `AiStatusFeedPayload` schema (`status`, optional `text`, optional `kind`)
+    and `parseAiStatusFeedPayload`, which rebuilds a payload from validated
+    fields so untyped feed data is never rendered as-is.
+  - `lib/ai-status.ts` now only holds the agent's presence identity plus
+    `ensureAiStatusFeed` (idempotent feed creation, tolerating the conflict a
+    second run gets) and `publishAiStatus`, which appends a message with the
+    node client.
+  - The design agent publishes to the feed instead of writing the `ai` Storage
+    key, so the Feature 23 Storage snapshot and its canvas overlay
+    (`components/editor/ai-activity-feed.tsx`) are gone.
+  - `components/editor/ai-sidebar.tsx` renders inside the room (passed to
+    `CanvasRoom` as `aiSidebar`) so it can use the Liveblocks feed hooks. It
+    waits for the feed to exist via `useFeeds`, reads only the newest message,
+    shows it as a status strip, and disables the prompt input plus spins the
+    send button while a run is `running`. The rest of the sidebar stays usable.
+  - `components/editor/presence-cursors.tsx` draws a small spinner in the name
+    badge when `thinking` is true in presence, and nothing otherwise.
+  - Checks: `npx tsc --noEmit`, targeted `npx eslint` and `npm run build`.
+
+- Feature 25: Sidebar Chat Feed
+  (`context/feature-specs/25-sidebar-chat-feed.md`).
+  - `types/tasks.ts` adds `AI_CHAT_FEED_ID` (`ai-chat`) and the Zod
+    `aiChatMessageSchema` (`sender`, `role`, `content`, `timestamp`) plus
+    `parseAiChatMessage`, so feed data is validated before it is rendered.
+  - `components/editor/ai-sidebar.tsx` creates the room-scoped `ai-chat` feed
+    on first use (idempotent, tolerating the 409 a racing participant gets) and
+    subscribes with `useFeedMessages`. Messages render in timestamp order with
+    sender, time and content, and `ai-chat` stays completely separate from
+    `ai-status-feed`.
+  - Sending publishes through `useCreateFeedMessage` from the existing composer
+    and send button, clears the input once the message is in the feed, and
+    shows a compact inline error when it cannot be sent. The Feature 23 design
+    trigger still fires after a message is published.
+  - `zod` is now a direct dependency (it was already installed transitively).
+  - Checks: `npx tsc --noEmit`, targeted `npx eslint` and
+    `NODE_ENV=production npm run build`.
+
+- Feature 26: Design Agent Frontend
+  (`context/feature-specs/26-design-agent-frontend.md`).
+  - Submitting a prompt publishes the user message to `ai-chat`, then calls
+    `POST /api/ai/design` with `{ prompt, roomId, projectId }` and stores the
+    returned `runId` plus its scoped `publicToken`. The route returns only the
+    run ID, so the sidebar requests the token from
+    `POST /api/ai/design/token`, while still accepting a token returned inline
+    if the route starts issuing one.
+  - `useRealtimeRun(runId, { accessToken: publicToken })` follows the run. The
+    composer is disabled and the send button spins while the run is active, and
+    a terminal status posts one assistant message into `ai-chat` (guarded by a
+    run-id ref) before the run state is cleared.
+  - Errors are posted into `ai-chat` as assistant messages; the inline error
+    line remains only for a failed chat write.
+  - The compact status strip now reads the latest `ai-status-feed` message and
+    renders directly above the composer, only while a run is active.
+  - Chat bubbles and the send button use the existing `success` token (`#34d399`)
+    with `text-primary-foreground`; AI replies stay on `bg-elevated` with light
+    text. No new colors were introduced.
+  - Canvas updates are untouched: `useLiveblocksFlow` already renders the AI's
+    Storage mutations, so no manual node/edge syncing was added.
+  - Fix: the sidebar mounted closed, so suspense `useFeeds` fired on every
+    editor load and its `Feeds fetch timeout` reached the room error boundary,
+    replacing the canvas with the connection error. Feed reads now use the
+    non-suspense hooks, are only requested after the AI workspace is first
+    opened (`feedsEnabled`), surface an inline "Room chat is unavailable"
+    state, and the sidebar has its own error boundary in `canvas-room.tsx`.
+  - Review fixes: design starts are rate-limited to 10 per user per 10
+    minutes, and a run is cancelled if its ownership row cannot be written;
+    `running` statuses older than the task's five-minute limit no longer
+    disable the composer; the agent applies plans against the live node map, so
+    node deletes remove their edges too; a canvas read failure fails the run
+    instead of designing over an unreadable board; AI presence sends
+    `cursorColor`; chat timestamps are bounded and formatted defensively.
+  - Checks: `npx tsc --noEmit`, targeted `npx eslint` and
+    `NODE_ENV=production npm run build`.
+
 ## In Progress
 
 - None.
 
 ## Next Up
 
-- The next feature (not yet specified).
+- The next feature: AI spec generation from the canvas graph.
 
 ## Open Questions
 
@@ -579,6 +729,48 @@ change.
 
 ## Architecture Decisions
 
+- Design generation writes to the room from the task, not from a browser tab,
+  so a run finishes even when nobody is watching. `mutateStorage` uses the
+  same `flow` / `LiveObject` / `LiveMap` layout `@liveblocks/react-flow`
+  owns, so generated nodes are ordinary collaborative nodes and selection,
+  resize, the colour toolbar and autosave apply to them unchanged.
+- The whole plan is applied in one `mutateStorage` call: partial application
+  would leave dangling edges when a later operation failed, and one atomic
+  write is one storage update for collaborators.
+- Gemini output is untrusted input. The model returns JSON that is parsed and
+  rebuilt by `parseAiDesignPlan` (allowed shapes, palette fills, clamped
+  sizes, slugified IDs, operation cap) before it reaches Storage.
+- AI presence uses the Liveblocks server presence API instead of a synthetic
+  client, so the agent has a real user ID, cursor and `thinking` flag that
+  the existing presence components already render. A TTL plus an explicit
+  clear at the end keeps a crashed agent from lingering.
+- Progress is shared through messages in the room's `ai-status-feed` Liveblocks
+  feed, not the Trigger run subscription and not a parallel Storage key: every
+  participant sees the latest status, and it outlives the run that published it.
+- Chat is its own `ai-chat` feed instead of a field on the status feed: the
+  conversation and the AI progress line have different schemas, readers and
+  retention needs, and separate feeds keep progress from re-rendering on every
+  chat message.
+- Run progress is followed from the submitting client with
+  `useRealtimeRun` and a run-scoped public token, while AI progress for the
+  whole room stays on `ai-status-feed`: the token route already verifies run
+  ownership, so no new realtime channel or server state was needed.
+- Design generation is triggered from `POST /api/ai/design`, not from the
+  client, so the Trigger.dev secret key stays server-side. The route
+  authorizes the project before triggering and persists the returned run ID
+  as a `TaskRun` row before returning it, so a client can never hold a run ID
+  the database has not attributed to a user.
+- A run-scoped token is issued only after `TaskRun.userId` matches the
+  signed-in user. The token is a Trigger.dev public token limited to
+  `read.runs: [runId]` with a one-hour expiry: enough to subscribe to that
+  one run, nothing else.
+- The design request carries `roomId` and `projectId` separately because the
+  task operates on a room, while authorization is project-based. They must be
+  equal, which keeps the project-ID-is-room-ID invariant enforceable at the
+  API boundary instead of assumed.
+- The task is triggered by its ID string with a type-only import of the task
+  (`tasks.trigger<typeof designAgent>`), so task code is never bundled into
+  the Next.js app.
 - Editor chrome is presentational: `EditorNavbar` and `ProjectSidebar` receive
   sidebar state through props; `EditorShell` is the single owner of that state
   for the `/editor` route.

@@ -20,6 +20,8 @@ export interface CanvasRoomProps {
   onSaveStatusChange?: CanvasProps["onSaveStatusChange"];
   onReadyChange?: CanvasProps["onReadyChange"];
   saveCanvasRef?: CanvasProps["saveCanvasRef"];
+  /** Rendered inside the room so it can read the room's feeds and presence. */
+  aiSidebar?: ReactNode;
 }
 
 /**
@@ -33,6 +35,7 @@ export function CanvasRoom({
   onSaveStatusChange,
   onReadyChange,
   saveCanvasRef,
+  aiSidebar,
 }: CanvasRoomProps) {
   return (
     <LiveblocksErrorBoundary>
@@ -55,6 +58,14 @@ export function CanvasRoom({
               saveCanvasRef={saveCanvasRef}
             />
           </ClientSideSuspense>
+          {/* The sidebar has its own boundary: loading feed data must not
+              replace the canvas with the connecting state, and a failed feed
+              request must not replace it with the room error either. */}
+          {aiSidebar ? (
+            <ClientSideSuspense fallback={null}>
+              <AiSidebarBoundary>{aiSidebar}</AiSidebarBoundary>
+            </ClientSideSuspense>
+          ) : null}
         </RoomProvider>
       </LiveblocksProvider>
     </LiveblocksErrorBoundary>
@@ -75,6 +86,30 @@ function CanvasLoading() {
 
 interface CanvasErrorState {
   hasError: boolean;
+}
+
+/**
+ * AI sidebar failures (feeds, run subscriptions) are local to the sidebar.
+ * Without this boundary they would reach the room boundary and replace the
+ * entire canvas with the connection error screen.
+ */
+class AiSidebarBoundary extends Component<
+  CanvasErrorBoundaryProps,
+  CanvasErrorState
+> {
+  state: CanvasErrorState = { hasError: false };
+
+  static getDerivedStateFromError(): CanvasErrorState {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: unknown) {
+    console.error("AI sidebar failed.", error);
+  }
+
+  render() {
+    return this.state.hasError ? null : this.props.children;
+  }
 }
 
 interface CanvasErrorBoundaryProps {

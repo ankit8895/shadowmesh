@@ -1,4 +1,10 @@
-import { DEFAULT_NODE_COLOR, NODE_SHAPES, type CanvasShape } from "@/types/canvas";
+// Relative types keep this module resolvable inside the Trigger.dev bundle,
+// which does not follow the app's tsconfig path aliases.
+import {
+  DEFAULT_NODE_COLOR,
+  NODE_SHAPES,
+  type CanvasShape,
+} from "../types/canvas";
 
 /** Drag payload type used by the shape panel and the canvas drop target. */
 export const SHAPE_DRAG_MIME = "application/x-shadowmesh-shape";
@@ -13,7 +19,11 @@ export interface ShapeDragPayload {
  * Default node sizes. Rectangles and pills are wider than tall, circles stay
  * square, and diamonds get extra room so labels fit inside the rotated box.
  */
-const SHAPE_SIZES: Record<CanvasShape, { width: number; height: number }> = {
+/** Shared default sizes; the AI agent lays out generated nodes with them too. */
+export const NODE_SHAPE_SIZES: Record<
+  CanvasShape,
+  { width: number; height: number }
+> = {
   rectangle: { width: 160, height: 100 },
   diamond: { width: 180, height: 180 },
   circle: { width: 120, height: 120 },
@@ -23,7 +33,7 @@ const SHAPE_SIZES: Record<CanvasShape, { width: number; height: number }> = {
 };
 
 export function createShapeDragPayload(shape: CanvasShape): ShapeDragPayload {
-  return { shape, ...SHAPE_SIZES[shape] };
+  return { shape, ...NODE_SHAPE_SIZES[shape] };
 }
 
 function isCanvasShape(value: unknown): value is CanvasShape {
