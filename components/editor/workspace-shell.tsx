@@ -36,7 +36,8 @@ export interface WorkspaceShellProps {
 /**
  * Full-viewport workspace for a single project: navbar, project sidebar,
  * collaborative canvas and AI workspace sidebar. The canvas opens the
- * project's Liveblocks room; the AI sidebar is a UI shell for now.
+ * project's Liveblocks room, and the AI sidebar renders inside that room so it
+ * can read the shared AI status feed.
  */
 export function WorkspaceShell({
   project,
@@ -46,6 +47,9 @@ export function WorkspaceShell({
 }: WorkspaceShellProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isAiSidebarOpen, setIsAiSidebarOpen] = useState(false);
+  // Feed reads are lazy: the room's chat and status feeds are only requested
+  // once the AI workspace has been opened.
+  const [hasOpenedAiSidebar, setHasOpenedAiSidebar] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
   const [pendingTemplate, setPendingTemplate] = useState<CanvasTemplate | null>(
@@ -129,7 +133,10 @@ export function WorkspaceShell({
               }
               aria-expanded={isAiSidebarOpen}
               aria-controls="ai-sidebar"
-              onClick={() => setIsAiSidebarOpen((isOpen) => !isOpen)}
+              onClick={() => {
+                setIsAiSidebarOpen((isOpen) => !isOpen);
+                setHasOpenedAiSidebar(true);
+              }}
             >
               <SparklesIcon size={20} aria-hidden="true" />
             </Button>
@@ -149,6 +156,14 @@ export function WorkspaceShell({
           onSaveStatusChange={setCanvasSaveStatus}
           onReadyChange={setIsCanvasReady}
           saveCanvasRef={saveCanvasRef}
+          aiSidebar={
+            <AiSidebar
+              isOpen={isAiSidebarOpen}
+              projectId={project.id}
+              feedsEnabled={hasOpenedAiSidebar}
+              onClose={() => setIsAiSidebarOpen(false)}
+            />
+          }
         />
 
         {/* The canvas owns the account menu once it loads; until then this
@@ -171,11 +186,6 @@ export function WorkspaceShell({
         onCreateProject={actions.openCreate}
         onRenameProject={actions.openRename}
         onDeleteProject={actions.openDelete}
-      />
-
-      <AiSidebar
-        isOpen={isAiSidebarOpen}
-        onClose={() => setIsAiSidebarOpen(false)}
       />
 
       <StarterTemplatesModal

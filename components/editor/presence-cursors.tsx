@@ -60,13 +60,20 @@ export function PresenceCursors() {
             </svg>
 
             <span
-              className="absolute top-4 left-4 max-w-40 truncate rounded-full px-2 py-0.5 text-[11px] leading-4 font-medium whitespace-nowrap shadow-surface-2"
+              data-thinking={other.presence.thinking ? "true" : undefined}
+              className="absolute top-4 left-4 flex max-w-40 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] leading-4 font-medium shadow-surface-2"
               style={{
                 backgroundColor: color,
                 color: "var(--bg-base)",
               }}
             >
-              {name}
+              {other.presence.thinking ? (
+                <span
+                  aria-hidden="true"
+                  className="size-2 shrink-0 animate-spin rounded-full border border-current border-t-transparent"
+                />
+              ) : null}
+              <span className="truncate">{name}</span>
             </span>
           </div>
         );

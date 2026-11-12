@@ -1,7 +1,7 @@
 export const DEFAULT_PROJECT_NAME = "Untitled Project";
 
-const MAX_ROOM_ID_LENGTH = 64;
-const ROOM_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+export const MAX_ROOM_ID_LENGTH = 64;
+export const ROOM_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 export interface CreateProjectInput {
   name: string;
@@ -29,7 +29,7 @@ export type ParseResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: string };
 
-async function readJsonObject(
+export async function readJsonObject(
   request: Request,
 ): Promise<ParseResult<Record<string, unknown>>> {
   let raw: string;
