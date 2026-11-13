@@ -20,6 +20,7 @@ export interface CanvasRoomProps {
   onSaveStatusChange?: CanvasProps["onSaveStatusChange"];
   onReadyChange?: CanvasProps["onReadyChange"];
   saveCanvasRef?: CanvasProps["saveCanvasRef"];
+  canvasSnapshotRef?: CanvasProps["canvasSnapshotRef"];
   /** Rendered inside the room so it can read the room's feeds and presence. */
   aiSidebar?: ReactNode;
 }
@@ -35,6 +36,7 @@ export function CanvasRoom({
   onSaveStatusChange,
   onReadyChange,
   saveCanvasRef,
+  canvasSnapshotRef,
   aiSidebar,
 }: CanvasRoomProps) {
   return (
@@ -56,6 +58,7 @@ export function CanvasRoom({
               onSaveStatusChange={onSaveStatusChange}
               onReadyChange={onReadyChange}
               saveCanvasRef={saveCanvasRef}
+              canvasSnapshotRef={canvasSnapshotRef}
             />
           </ClientSideSuspense>
           {/* The sidebar has its own boundary: loading feed data must not

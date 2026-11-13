@@ -22,6 +22,7 @@ import type { CanvasTemplate } from "@/components/editor/starter-templates";
 import { Button } from "@/components/matos-ui/button";
 import type { CanvasSaveStatus } from "@/hooks/use-canvas-autosave";
 import { useProjectActions } from "@/hooks/use-project-actions";
+import type { CanvasSnapshot } from "@/lib/canvas-snapshot";
 import type { ProjectSummary } from "@/lib/project-types";
 import { cn } from "@/lib/utils";
 
@@ -59,6 +60,7 @@ export function WorkspaceShell({
     useState<CanvasSaveStatus>("idle");
   const [isCanvasReady, setIsCanvasReady] = useState(false);
   const saveCanvasRef = useRef<(() => Promise<void>) | null>(null);
+  const canvasSnapshotRef = useRef<(() => CanvasSnapshot) | null>(null);
   const actions = useProjectActions({ activeProjectId: project.id });
 
   const saveLabel =
@@ -156,10 +158,12 @@ export function WorkspaceShell({
           onSaveStatusChange={setCanvasSaveStatus}
           onReadyChange={setIsCanvasReady}
           saveCanvasRef={saveCanvasRef}
+          canvasSnapshotRef={canvasSnapshotRef}
           aiSidebar={
             <AiSidebar
               isOpen={isAiSidebarOpen}
               projectId={project.id}
+              canvasSnapshotRef={canvasSnapshotRef}
               feedsEnabled={hasOpenedAiSidebar}
               onClose={() => setIsAiSidebarOpen(false)}
             />

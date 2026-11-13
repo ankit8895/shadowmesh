@@ -11,7 +11,6 @@ import { useRealtimeRun } from "@trigger.dev/react-hooks";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   BotIcon,
-  DownloadIcon,
   FileTextIcon,
   SendIcon,
   XIcon,
@@ -21,6 +20,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
   type ReactNode,
+  type RefObject,
   useCallback,
   useContext,
   useEffect,
@@ -30,11 +30,23 @@ import {
 } from "react";
 import { Tabs } from "radix-ui";
 
+import { SpecList } from "@/components/editor/spec-list";
+import { SpecPreviewDialog } from "@/components/editor/spec-preview-dialog";
 import { Button } from "@/components/matos-ui/button";
 import { Textarea } from "@/components/matos-ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  useProjectSpecs,
+  type ProjectSpecSummary,
+} from "@/hooks/use-project-specs";
 import { readErrorMessage } from "@/lib/api-error";
+import type { CanvasSnapshot } from "@/lib/canvas-snapshot";
 import { spring, withReducedMotion } from "@/lib/motion-tokens";
+import {
+  MAX_SPEC_CHAT_MESSAGES,
+  MAX_SPEC_EDGES,
+  MAX_SPEC_NODES,
+} from "@/lib/spec-input";
 import { cn } from "@/lib/utils";
 import {
   AI_CHAT_FEED_ID,
@@ -52,6 +64,11 @@ export interface AiSidebarProps {
   isOpen: boolean;
   /** The open project; it is also the Liveblocks room the agent writes to. */
   projectId: string;
+  /**
+   * Reads the canvas as it is at this moment. The shell fills it once the flow
+   * mounts, so the sidebar can send the current drawing without owning it.
+   */
+  canvasSnapshotRef?: RefObject<(() => CanvasSnapshot) | null>;
   /**
    * Whether the room's feeds may be requested. The sidebar mounts closed, but
    * feed reads only start once it has been opened at least once, so visiting
@@ -153,8 +170,11 @@ interface DesignRunHandle {
 }
 
 /** The design route returns a token when it can; otherwise the token route does. */
-async function fetchRunToken(runId: string): Promise<string> {
-  const response = await fetch("/api/ai/design/token", {
+async function fetchRunToken(
+  runId: string,
+  endpoint = "/api/ai/design/token",
+): Promise<string> {
+  const response = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ runId }),
@@ -199,6 +219,44 @@ async function startDesignRun(prompt: string, roomId: string): Promise<DesignRun
       : await fetchRunToken(body.runId);
 
   return { runId: body.runId, publicToken };
+}
+
+/**
+ * Sends the room's canvas and chat to the spec route and returns the run to
+ * follow. The route derives the project from the room, so the canvas that is
+ * specified is the one the caller can actually open.
+ */
+async function startSpecRun(payload: {
+  roomId: string;
+  chatHistory: { role: "user" | "assistant"; content: string }[];
+  nodes: { id: string; data: { label: string; shape: string } }[];
+  edges: {
+    id: string;
+    source: string;
+    target: string;
+    data: { label: string };
+  }[];
+}): Promise<ActiveRun> {
+  const response = await fetch("/api/ai/spec", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+
+  const body = (await response.json()) as { runId?: unknown };
+
+  if (typeof body.runId !== "string" || body.runId === "") {
+    throw new Error("The spec run did not return a run ID.");
+  }
+
+  return {
+    runId: body.runId,
+    publicToken: await fetchRunToken(body.runId, "/api/ai/spec/token"),
+  };
 }
 
 /**
@@ -464,6 +522,215 @@ function RoomChatFeedReader({
 }
 
 /**
+ * Specs tab: the project's saved specs, newest first, plus the action that
+ * generates one from the current canvas and conversation. The list is fetched
+ * when the tab mounts, and the Markdown is only requested for the open preview,
+ * so the sidebar never holds spec content it is not showing.
+ */
+function SpecsTab({
+  projectId,
+  canvasSnapshotRef,
+}: {
+  projectId: string;
+  canvasSnapshotRef?: RefObject<(() => CanvasSnapshot) | null>;
+}) {
+  const { specs, hasLoaded, error, reload } = useProjectSpecs(projectId);
+  const { messages } = useRoomChat();
+  const [previewSpec, setPreviewSpec] = useState<ProjectSpecSummary | null>(null);
+  const [activeRun, setActiveRun] = useState<ActiveRun | null>(null);
+  const [isStarting, setIsStarting] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
+  const finishedRunIdRef = useRef<string | null>(null);
+  const isGenerating = isStarting || activeRun !== null;
+
+  const { run, error: runError } = useRealtimeRun(activeRun?.runId, {
+    accessToken: activeRun?.publicToken,
+    enabled: activeRun !== null,
+  });
+
+  // One refresh per run: the run object keeps updating until the subscription
+  // stops, so the id guard keeps the list from reloading twice.
+  useEffect(() => {
+    if (!activeRun || !run || run.id !== activeRun.runId) {
+      return;
+    }
+
+    if (!isTerminalRunStatus(run.status)) {
+      return;
+    }
+
+    if (finishedRunIdRef.current === run.id) {
+      return;
+    }
+
+    finishedRunIdRef.current = run.id;
+
+    const succeeded = run.status === "COMPLETED";
+
+    void (async () => {
+      if (succeeded) {
+        reload();
+      } else {
+        setGenerateError(
+          "The spec run ended before it could be saved. Try again.",
+        );
+      }
+
+      setActiveRun(null);
+      setIsStarting(false);
+    })();
+  }, [activeRun, run, reload]);
+
+  // A broken subscription must not leave the button disabled for the session.
+  useEffect(() => {
+    if (!activeRun || !runError) {
+      return;
+    }
+
+    if (finishedRunIdRef.current === activeRun.runId) {
+      return;
+    }
+
+    finishedRunIdRef.current = activeRun.runId;
+
+    void (async () => {
+      setGenerateError(
+        "Lost the live connection to this spec run. Check the list again in a moment.",
+      );
+      setActiveRun(null);
+      setIsStarting(false);
+    })();
+  }, [activeRun, runError]);
+
+  // The task gives up after five minutes, so a run that never reports must not
+  // keep the button disabled; refresh whatever it managed to save.
+  useEffect(() => {
+    if (!activeRun) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      reload();
+      setGenerateError(
+        "The spec is taking longer than expected. Check the list again in a moment.",
+      );
+      setActiveRun(null);
+      setIsStarting(false);
+    }, AI_RUN_STALE_AFTER_MS);
+
+    return () => clearTimeout(timer);
+  }, [activeRun, reload]);
+
+  function handleGenerate() {
+    if (isGenerating) {
+      return;
+    }
+
+    const snapshot = canvasSnapshotRef?.current?.() ?? null;
+
+    if (!snapshot) {
+      setGenerateError("The canvas is still loading. Try again in a moment.");
+      return;
+    }
+
+    const nodeIds = new Set(snapshot.nodes.map((node) => node.id));
+    const nodes = snapshot.nodes.slice(0, MAX_SPEC_NODES).map((node) => ({
+      id: node.id,
+      data: { label: node.data.label, shape: node.data.shape },
+    }));
+    const edges = snapshot.edges
+      .filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target))
+      .slice(0, MAX_SPEC_EDGES)
+      .map((edge) => ({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        data: { label: edge.data?.label ?? "" },
+      }));
+    const chatHistory = messages
+      .slice(-MAX_SPEC_CHAT_MESSAGES)
+      .map((message) => ({ role: message.role, content: message.content }));
+
+    if (nodes.length === 0 && chatHistory.length === 0) {
+      setGenerateError(
+        "Draw the architecture on the canvas or chat with the AI Architect first.",
+      );
+      return;
+    }
+
+    setGenerateError(null);
+    setIsStarting(true);
+    finishedRunIdRef.current = null;
+
+    void (async () => {
+      try {
+        const started = await startSpecRun({
+          roomId: projectId,
+          chatHistory,
+          nodes,
+          edges,
+        });
+
+        setActiveRun(started);
+      } catch (error) {
+        setGenerateError(
+          error instanceof Error && error.message
+            ? error.message
+            : "The spec run could not be started.",
+        );
+      } finally {
+        setIsStarting(false);
+      }
+    })();
+  }
+
+  return (
+    <>
+      <Button
+        type="button"
+        onClick={handleGenerate}
+        disabled={isGenerating}
+        aria-busy={isGenerating}
+        className="w-full shrink-0 bg-brand text-primary-foreground hover:bg-brand/90"
+      >
+        {isGenerating ? (
+          <span
+            aria-hidden="true"
+            className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+          />
+        ) : (
+          <FileTextIcon size={16} aria-hidden="true" />
+        )}
+        {isGenerating ? "Generating spec…" : "Generate Spec"}
+      </Button>
+
+      {generateError ? (
+        <p role="alert" className="text-[11px] leading-relaxed text-error">
+          {generateError}
+        </p>
+      ) : null}
+
+      <SpecList
+        projectId={projectId}
+        specs={specs}
+        hasLoaded={hasLoaded}
+        error={error}
+        onSelect={setPreviewSpec}
+        onRetry={reload}
+      />
+
+      <SpecPreviewDialog
+        projectId={projectId}
+        spec={previewSpec}
+        onOpenChange={(open) => {
+          if (!open) setPreviewSpec(null);
+        }}
+      />
+    </>
+  );
+}
+
+/**
  * Floating AI workspace shell, mounted inside the room. The parent owns
  * open/close state.
  *
@@ -481,7 +748,12 @@ export function AiSidebar(props: AiSidebarProps) {
   );
 }
 
-function AiSidebarView({ isOpen, projectId, onClose }: AiSidebarProps) {
+function AiSidebarView({
+  isOpen,
+  projectId,
+  canvasSnapshotRef,
+  onClose,
+}: AiSidebarProps) {
   const shouldReduceMotion = useReducedMotion();
   const variants = shouldReduceMotion
     ? withReducedMotion(sidebarVariants)
@@ -908,43 +1180,12 @@ function AiSidebarView({ isOpen, projectId, onClose }: AiSidebarProps) {
 
             <Tabs.Content
               value="specs"
-              className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4 outline-none data-[state=inactive]:hidden"
+              className="flex min-h-0 flex-1 flex-col gap-3 p-4 outline-none data-[state=inactive]:hidden"
             >
-              <Button
-                type="button"
-                className="w-full bg-brand text-primary-foreground hover:bg-brand/90"
-              >
-                <FileTextIcon size={16} aria-hidden="true" />
-                Generate Spec
-              </Button>
-
-              <article className="rounded-2xl border border-surface-border bg-elevated p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex min-w-0 gap-2.5">
-                    <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-ai-text">
-                      <FileTextIcon size={18} aria-hidden="true" />
-                    </span>
-                    <div className="min-w-0">
-                      <h3 className="truncate text-sm font-medium text-copy-primary">
-                        System Architecture Spec
-                      </h3>
-                      <p className="mt-1 text-xs leading-relaxed text-copy-muted">
-                        A high-level overview of services, data stores, and
-                        request flows for the current canvas.
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    disabled
-                    aria-label="Download spec"
-                  >
-                    <DownloadIcon size={16} aria-hidden="true" />
-                  </Button>
-                </div>
-              </article>
+              <SpecsTab
+                projectId={projectId}
+                canvasSnapshotRef={canvasSnapshotRef}
+              />
             </Tabs.Content>
           </Tabs.Root>
         </motion.aside>

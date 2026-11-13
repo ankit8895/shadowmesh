@@ -50,6 +50,12 @@ change.
   (`context/feature-specs/25-sidebar-chat-feed.md`)
 - Complete — Feature 26: Design Agent Frontend
   (`context/feature-specs/26-design-agent-frontend.md`)
+- Complete — Feature 27: Spec Generation Flow
+  (`context/feature-specs/27-spec-generation-flow.md`)
+- Complete — Feature 28: Spec Persistence & Download
+  (`context/feature-specs/28-spec-persistence-download.md`)
+- Complete — Feature 29: Spec UI Integration
+  (`context/feature-specs/29-spec-ui-integration.md`)
 - Replace `lucide-react` with `lucide-animated` across the entire project.
   All icon imports updated to use `lucide-animated` names (with `Icon` suffix).
 - UI updated to match the 50/50 split-screen sign-in layout: teal-tinted left
@@ -71,7 +77,7 @@ change.
 
 ## Current Goal
 
-- Feature 26 complete. The AI sidebar starts design runs, follows them with `useRealtimeRun`, and posts the result back into `ai-chat`.
+- Feature 29 complete. The AI sidebar's Specs tab lists the project's generated specs, previews a spec's Markdown in a dialog, and downloads it through the access-checked route.
 
 ## Completed
 
@@ -715,20 +721,147 @@ change.
   - Checks: `npx tsc --noEmit`, targeted `npx eslint` and
     `NODE_ENV=production npm run build`.
 
+- Feature 27: Spec Generation Flow
+  (`context/feature-specs/27-spec-generation-flow.md`).
+  - `POST /api/ai/spec` accepts `{ roomId, chatHistory, nodes, edges }`,
+    validates it with the shared Zod `specRequestSchema`, authorizes the
+    project from `roomId` and derives `projectId` from that authorized room,
+    then triggers `generate-spec` and records a `TaskRun` for the caller. The
+    shared per-user run limit applies, and an ownership write failure cancels
+    the queued run.
+  - `POST /api/ai/spec/token` reuses the run-token handler that the design
+    token route now shares: signed-in caller, `TaskRun.userId` ownership check,
+    and a one-hour Trigger.dev token scoped to `read.runs: [runId]`.
+  - `trigger/generate-spec.ts` is a `schemaTask` using the same payload schema,
+    so malformed canvas or chat data fails before the Gemini call. It prompts
+    `gemini-2.5-flash` for a plain-Markdown technical spec with fixed sections,
+    publishes reading/generating/complete/error statuses to `ai-status-feed`
+    as `kind: "spec"`, mirrors progress into run metadata, and returns the
+    Markdown as task output. Feature 28 now persists that output.
+  - `lib/spec-input.ts` owns the request/task contract and caps (50 chat
+    messages, 200 nodes, 400 edges); only the role and content of each chat
+    message are used.
+  - Checks: `npx tsc --noEmit`, targeted `npx eslint` and
+    `NODE_ENV=production npm run build`.
+
+- Feature 28: Spec Persistence & Download
+  (`context/feature-specs/28-spec-persistence-download.md`).
+  - `prisma/models/spec.prisma` adds `ProjectSpec` (`cuid` `id`, `projectId`
+    with a cascade relation to `Project`, private `filePath`, `createdAt` and a
+    `projectId` / `createdAt` index), with migration
+    `prisma/migrations/20261112120000_add_project_spec`. Prisma holds metadata
+    only; the Markdown stays in Vercel Blob.
+  - `lib/spec-store.ts` uploads to `specs/{projectId}/{specId}.md` in the
+    private Blob store, then creates the `ProjectSpec` row (same ID) pointing
+    at the blob URL.
+    Specs are immutable per generation, unlike the overwrite-in-place canvas
+    path, so a later run never replaces an earlier spec.
+  - `trigger/generate-spec.ts` saves the generated Markdown before reporting
+    completion and records the new `specId` in run metadata. A storage failure
+    fails the run and publishes the error status, so a completed run always has
+    a downloadable file.
+  - `GET /api/projects/[projectId]/specs/[specId]/download` authenticates,
+    checks project access with `authorizeProjectAccess`, looks the spec up by
+    both project and spec ID, and streams the private blob as
+    `text/markdown` with an attachment filename. Blob URLs are never returned
+    to the client, and missing project, spec or file answer `404`.
+  - The Trigger worker needs `DATABASE_URL` and `BLOB_READ_WRITE_TOKEN` in its
+    own environment for the save step.
+  - Checks: `npx tsc --noEmit`, targeted `npx eslint` and
+    `NODE_ENV=production npm run build`.
+
+- Feature 29: Spec UI Integration
+  (`context/feature-specs/29-spec-ui-integration.md`).
+  - The Specs tab of `components/editor/ai-sidebar.tsx` is now a `SpecsTab`
+    that mounts only while the tab is selected: it keeps the existing accent
+    `Generate Spec` button and renders the real spec list plus the preview
+    dialog. The static demo card was removed.
+  - `hooks/use-project-specs.ts` fetches the spec metadata for the project when
+    the tab mounts, validates every entry before rendering, and exposes
+    `specs` / `hasLoaded` / `isLoading` / `error` / `reload`. Switching tabs
+    remounts the tab and refetches; nothing is cached globally.
+  - `components/editor/spec-list.tsx` is the compact, `ScrollArea`-backed list:
+    each row shows the filename and `createdAt`, the row body opens the
+    preview, and a ghost download anchor saves the file. Loading, error with
+    retry, and empty states are handled in place.
+  - `components/editor/spec-preview-dialog.tsx` is a `StackedDialog` that
+    fetches the spec's Markdown when a spec is selected, renders it through
+    `components/editor/spec-markdown.tsx` (react-markdown + `remark-gfm`, every
+    element mapped onto theme tokens), and offers Download and Close actions.
+    Escape, the backdrop and focus trapping come from the dialog primitive.
+    Content lives only while the dialog is open.
+  - Spec content is read through the existing access-checked download route
+    (`GET /api/projects/[projectId]/specs/[specId]/download`); `fetch` ignores
+    the attachment header, so the Blob URL still never reaches the client.
+  - `GET /api/projects/[projectId]/specs` was added as the minimal read-only
+    listing endpoint the UI needs (metadata only: `id`, `createdAt`,
+    `filename`), authorized with `authorizeProjectAccess` and backed by
+    `listProjectSpecs` in `lib/spec-store.ts`. No write path was added.
+  - `lib/spec-file.ts` owns the download URL, the attachment filename
+    (`shadowmesh-spec-{id}.md`) and the formatted timestamp, so the download
+    route and the UI cannot disagree; the download route now uses it.
+  - `react-markdown` and `remark-gfm` were added for the Markdown preview.
+  - Review follow-ups: the preview scroller now has a definite height so long
+    specs scroll instead of being clipped; a failed refresh keeps the rows
+    already on screen; `Generate Spec` starts a run from the live canvas and
+    the room chat and refreshes the list when it settles; spec saves are
+    idempotent per run ID so a retried run cannot duplicate a spec; rate
+    limiting is per task through the new `TaskRun.taskKey` column; and the
+    spec filename now uses a readable short ID.
+  - A column added here (for example `TaskRun.taskKey`) needs
+    `npx prisma generate` **and** a restart of `next dev`: the running server
+    keeps serving the client it compiled earlier, so the new field only fails
+    at request time with `PrismaClientValidationError ... Unknown argument`.
+    The Trigger worker holds its own bundle and needs the same restart.
+  - The specs list failed with `P2021` until the already-committed
+    `20261112120000_add_project_spec` migration was applied to the dev database
+    (`npx prisma migrate deploy`). Any fresh environment needs it too, otherwise
+    the Specs tab and spec persistence fail the same way.
+  - Checks: `npx tsc --noEmit`, targeted `npx eslint` and
+    `NODE_ENV=production npm run build`.
+
 ## In Progress
 
 - None.
 
 ## Next Up
 
-- The next feature: AI spec generation from the canvas graph.
+- Wire the Specs tab's `Generate Spec` button to `POST /api/ai/spec` with the
+  room's canvas and `ai-chat` history, and refresh the list when that run
+  completes.
 
 ## Open Questions
 
-- None.
+- Feature 29 said to reuse an existing spec API and add no backend logic, but
+  only the download route existed — there was no way to list a project's specs.
+  A metadata-only `GET /api/projects/[projectId]/specs` route was added; confirm
+  that is the intended home for the listing rather than a server component
+  prop.
 
 ## Architecture Decisions
 
+- Spec content lives in Vercel Blob and only its private URL plus project
+  linkage live in `ProjectSpec`, matching the canvas split: Blob for the
+  artifact, Postgres for metadata and ownership.
+- The download route streams the blob through the server after
+  `authorizeProjectAccess` and looks the spec up by both project and spec ID,
+  so blob URLs are never exposed and one project cannot download another's
+  spec.
+- Spec persistence runs inside the `generate-spec` task, where the Markdown is
+  produced and the server-derived project ID is already validated, so a
+  completed run always has a stored file; the worker therefore needs
+  `DATABASE_URL` and `BLOB_READ_WRITE_TOKEN`.
+- Spec generation authorizes from `roomId` and derives `projectId` from the
+  authorized room, so a client cannot name another project's canvas; the task
+  payload repeats the project ID only for provenance.
+- The spec task validates its payload with the same Zod schema the route uses
+  (`schemaTask`), so invalid canvas or chat input fails before Gemini is
+  billed, and the spec stays plain Markdown as the task output until a later
+  unit persists it.
+- Spec progress uses Trigger run metadata plus the shared `ai-status-feed`
+  (`kind: "spec"`): room participants see it through the existing status strip,
+  and the submitting client can read metadata through `useRealtimeRun` without
+  a new realtime channel.
 - Design generation writes to the room from the task, not from a browser tab,
   so a run finishes even when nobody is watching. `mutateStorage` uses the
   same `flow` / `LiveObject` / `LiveMap` layout `@liveblocks/react-flow`

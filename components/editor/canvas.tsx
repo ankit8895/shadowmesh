@@ -44,7 +44,10 @@ import {
   parseShapeDragPayload,
   SHAPE_DRAG_MIME,
 } from "@/lib/canvas-drag";
-import type { CanvasSnapshot } from "@/lib/canvas-snapshot";
+import {
+  createCanvasSnapshot,
+  type CanvasSnapshot,
+} from "@/lib/canvas-snapshot";
 import type { CanvasEdge, CanvasNode, CanvasNodeData } from "@/types/canvas";
 
 const nodeTypes = { canvasNode: CanvasNodeView } satisfies NodeTypes;
@@ -94,6 +97,11 @@ export interface CanvasProps {
   onReadyChange?: (ready: boolean) => void;
   /** Filled with the manual save action so the navbar can trigger it. */
   saveCanvasRef?: RefObject<(() => Promise<void>) | null>;
+  /**
+   * Filled with a reader for the current canvas so AI features can send it
+   * without the sidebar reaching into the flow's storage itself.
+   */
+  canvasSnapshotRef?: RefObject<(() => CanvasSnapshot) | null>;
 }
 
 /**
@@ -107,6 +115,7 @@ export function Canvas({
   onSaveStatusChange,
   onReadyChange,
   saveCanvasRef,
+  canvasSnapshotRef,
 }: CanvasProps) {
   return (
     <ReactFlowProvider>
@@ -117,6 +126,7 @@ export function Canvas({
         onSaveStatusChange={onSaveStatusChange}
         onReadyChange={onReadyChange}
         saveCanvasRef={saveCanvasRef}
+        canvasSnapshotRef={canvasSnapshotRef}
       />
     </ReactFlowProvider>
   );
@@ -134,6 +144,7 @@ function CanvasFlow({
   onSaveStatusChange,
   onReadyChange,
   saveCanvasRef,
+  canvasSnapshotRef,
 }: CanvasProps) {
   const { nodes, edges, onNodesChange, onEdgesChange, onDelete } =
     useLiveblocksFlow<CanvasNode, CanvasEdge>({ suspense: true });
@@ -176,6 +187,20 @@ function CanvasFlow({
       saveCanvasRef.current = null;
     };
   }, [save, saveCanvasRef]);
+
+  // The sidebar reads this when it starts a spec run, so it always receives the
+  // canvas as it is at that moment instead of a copy from an earlier render.
+  useEffect(() => {
+    if (!canvasSnapshotRef) {
+      return;
+    }
+
+    canvasSnapshotRef.current = () => createCanvasSnapshot(nodes, edges);
+
+    return () => {
+      canvasSnapshotRef.current = null;
+    };
+  }, [canvasSnapshotRef, nodes, edges]);
 
   const handleMouseMove = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>) => {

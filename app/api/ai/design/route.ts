@@ -4,11 +4,12 @@ import type { designAgent } from "@/trigger/design-agent";
 import { jsonError } from "@/lib/api-response";
 import { parseDesignInput } from "@/lib/design-input";
 import { authorizeProjectAccess } from "@/lib/project-access";
-import { countRecentTaskRuns, createTaskRun } from "@/lib/task-runs";
-
-/** Each run costs a model call, so one user cannot start them without limit. */
-const RUN_RATE_LIMIT = 10;
-const RUN_RATE_WINDOW_MS = 10 * 60 * 1000;
+import {
+  countRecentTaskRuns,
+  createTaskRun,
+  RUN_RATE_LIMIT,
+  RUN_RATE_WINDOW_MS,
+} from "@/lib/task-runs";
 
 /**
  * Starts a design generation run for a project the caller can open. The task is
@@ -35,6 +36,7 @@ export async function POST(request: Request) {
   try {
     const recentRuns = await countRecentTaskRuns({
       userId: access.viewer.userId,
+      taskKey: "design-agent",
       since: new Date(Date.now() - RUN_RATE_WINDOW_MS),
     });
 
@@ -57,6 +59,7 @@ export async function POST(request: Request) {
         runId: handle.id,
         projectId: input.data.projectId,
         userId: access.viewer.userId,
+        taskKey: "design-agent",
       });
     } catch (error) {
       console.error("Unable to record the design run.", error);
