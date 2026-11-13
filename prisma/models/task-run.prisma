@@ -4,7 +4,10 @@ model TaskRun {
   projectId String
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   userId    String
+  /// Trigger.dev task ID; keeps each AI feature's rate limit separate.
+  taskKey   String?
   createdAt DateTime @default(now())
 
   @@index([userId, projectId])
+  @@index([userId, taskKey, createdAt])
 }

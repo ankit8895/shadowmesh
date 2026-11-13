@@ -6,17 +6,11 @@ import {
 } from "@/lib/project-input";
 
 const MAX_PROMPT_LENGTH = 2000;
-const MAX_RUN_ID_LENGTH = 64;
-const RUN_ID_PATTERN = /^run_[A-Za-z0-9]+$/;
 
 export interface DesignInput {
   prompt: string;
   projectId: string;
   roomId: string;
-}
-
-export interface DesignTokenInput {
-  runId: string;
 }
 
 /**
@@ -85,32 +79,4 @@ export async function parseDesignInput(
       roomId: trimmedRoomId,
     },
   };
-}
-
-/** The token request names the run whose run-scoped token is requested. */
-export async function parseDesignTokenInput(
-  request: Request,
-): Promise<ParseResult<DesignTokenInput>> {
-  const body = await readJsonObject(request);
-
-  if (!body.ok) {
-    return body;
-  }
-
-  const { runId } = body.data;
-
-  if (typeof runId !== "string" || runId.trim() === "") {
-    return { ok: false, error: "A run ID is required." };
-  }
-
-  const trimmedRunId = runId.trim();
-
-  if (
-    trimmedRunId.length > MAX_RUN_ID_LENGTH ||
-    !RUN_ID_PATTERN.test(trimmedRunId)
-  ) {
-    return { ok: false, error: "Enter a valid run ID." };
-  }
-
-  return { ok: true, data: { runId: trimmedRunId } };
 }

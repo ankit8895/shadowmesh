@@ -11,7 +11,17 @@ export interface CreateTaskRunInput {
   runId: string;
   projectId: string;
   userId: string;
+  /** Trigger.dev task ID, so each AI feature gets its own rate limit. */
+  taskKey: string;
 }
+
+/**
+ * Every AI run costs a model call, so one user cannot start them without
+ * limit. Each task has its own rolling window, so generating specs never uses
+ * up the design budget.
+ */
+export const RUN_RATE_LIMIT = 10;
+export const RUN_RATE_WINDOW_MS = 10 * 60 * 1000;
 
 /** Records a triggered run so its ownership can be verified before tokens. */
 export function createTaskRun(input: CreateTaskRunInput) {
@@ -29,9 +39,20 @@ export function findTaskRun(runId: string) {
   });
 }
 
-/** Counts runs a user started since a cutoff, for the start-run rate limit. */
-export function countRecentTaskRuns(input: { userId: string; since: Date }) {
+/**
+ * Counts the runs one user started for a task since a cutoff, for the
+ * start-run rate limit.
+ */
+export function countRecentTaskRuns(input: {
+  userId: string;
+  taskKey: string;
+  since: Date;
+}) {
   return prisma.taskRun.count({
-    where: { userId: input.userId, createdAt: { gte: input.since } },
+    where: {
+      userId: input.userId,
+      taskKey: input.taskKey,
+      createdAt: { gte: input.since },
+    },
   });
 }
