@@ -1,5 +1,3 @@
-import { createGoogle } from "@ai-sdk/google";
-import { generateText } from "ai";
 import { logger, metadata, schemaTask } from "@trigger.dev/sdk";
 
 import { publishAiStatus } from "../lib/ai-status";
@@ -9,23 +7,12 @@ import {
 } from "../lib/spec-input";
 import { saveProjectSpec } from "../lib/spec-store";
 import type { AiTaskStatus } from "../types/tasks";
-import { geminiApiKey } from "./keys";
-
-const MODEL_ID = "gemini-2.5-flash";
+import { generateGeminiText } from "./gemini";
 
 /** The prompt is trimmed further than the request caps to bound its size. */
 const MAX_PROMPT_NODES = 120;
 const MAX_PROMPT_EDGES = 160;
 const MAX_PROMPT_CHAT_MESSAGES = 30;
-
-/**
- * The provider reads the runtime API key so the model calls succeed against the
- * actual Gemini endpoint. A new instance is created per run, matching the
- * design agent, rather than adding a shared provider abstraction.
- */
-function googleProvider(): ReturnType<typeof createGoogle> {
-  return createGoogle({ apiKey: geminiApiKey() });
-}
 
 function buildSystemPrompt(): string {
   return [
@@ -144,7 +131,6 @@ export const generateSpec = schemaTask({
       );
 
       logger.log("Requesting a spec from Gemini.", {
-        model: MODEL_ID,
         roomId: payload.roomId,
         runId: ctx.run.id,
         nodes: payload.nodes.length,
@@ -152,13 +138,14 @@ export const generateSpec = schemaTask({
         chatMessages: payload.chatHistory.length,
       });
 
-      const { text } = await generateText({
-        model: googleProvider().languageModel(MODEL_ID),
+      const { text, modelId } = await generateGeminiText({
         system: buildSystemPrompt(),
         prompt: `${buildCanvasContext(payload)}\n\n${buildChatContext(
           payload.chatHistory,
         )}`,
       });
+
+      logger.log("Gemini returned a spec.", { model: modelId });
 
       const spec = text.trim();
 

@@ -1,5 +1,3 @@
-import { createGoogle } from "@ai-sdk/google";
-import { generateText } from "ai";
 import { logger, task } from "@trigger.dev/sdk";
 
 import { parseAiDesignPlan, AI_MAX_OPERATIONS } from "../lib/ai-canvas";
@@ -17,26 +15,11 @@ import {
   setAiPresence,
   type AiCanvasSummary,
 } from "./design-room";
-import { geminiApiKey } from "./keys";
+import { generateGeminiText } from "./gemini";
 
 export interface DesignAgentPayload {
   prompt: string;
   roomId: string;
-}
-
-const MODEL_ID = "gemini-2.5-flash";
-
-/**
- * A provider configured with the runtime API key so the model calls succeed
- * against the actual Gemini endpoint (the default `google` provider reads
- * `GOOGLE_GENERATIVE_AI_API_KEY`, which is not how the key is stored here).
- *
- * A new instance is created per run so the key is read from the latest
- * env at run time and the provider is safe to serialize across the Trigger
- * worker boundary.
- */
-function googleProvider(): ReturnType<typeof createGoogle> {
-  return createGoogle({ apiKey: geminiApiKey() });
 }
 
 /** The canvas context is trimmed so a large board cannot blow up the prompt. */
@@ -194,18 +177,16 @@ export const designAgent = task({
       );
 
       logger.log("Requesting a design plan from Gemini.", {
-        model: MODEL_ID,
         roomId: payload.roomId,
         existingNodes: canvas.nodes.length,
       });
 
-      const model = googleProvider().languageModel(MODEL_ID);
-
-      const { text } = await generateText({
-        model,
+      const { text, modelId } = await generateGeminiText({
         system: buildSystemPrompt(),
         prompt: `${buildCanvasContext(canvas)}\n\nUser request:\n${payload.prompt.trim()}`,
       });
+
+      logger.log("Gemini returned a design plan.", { model: modelId });
 
       const json = extractJsonObject(text);
 

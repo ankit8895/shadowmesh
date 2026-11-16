@@ -610,8 +610,8 @@ change.
 - Feature 23: Design Agent Logic
   (`context/feature-specs/23-design-agent-logic.md`).
   - `trigger/design-agent.ts` now runs the real agent: it publishes a running
-    status, reads the room canvas for context, asks Gemini
-    (`gemini-2.5-flash`) for a JSON design plan, validates it with
+    status, reads the room canvas for context, asks Gemini (via the shared
+    `trigger/gemini.ts` caller) for a JSON design plan, validates it with
     `parseAiDesignPlan`, applies it to Storage, and reports completion or
     failure. Presence is cleared in a `finally`, so a failed run never leaves
     the AI stuck on the canvas.
@@ -734,8 +734,9 @@ change.
     and a one-hour Trigger.dev token scoped to `read.runs: [runId]`.
   - `trigger/generate-spec.ts` is a `schemaTask` using the same payload schema,
     so malformed canvas or chat data fails before the Gemini call. It prompts
-    `gemini-2.5-flash` for a plain-Markdown technical spec with fixed sections,
-    publishes reading/generating/complete/error statuses to `ai-status-feed`
+    the same shared caller for a plain-Markdown technical spec with fixed
+    sections, publishes reading/generating/complete/error statuses to
+    `ai-status-feed`
     as `kind: "spec"`, mirrors progress into run metadata, and returns the
     Markdown as task output. Feature 28 now persists that output.
   - `lib/spec-input.ts` owns the request/task contract and caps (50 chat
@@ -767,6 +768,21 @@ change.
     to the client, and missing project, spec or file answer `404`.
   - The Trigger worker needs `DATABASE_URL` and `BLOB_READ_WRITE_TOKEN` in its
     own environment for the save step.
+  - AI keys: a local `trigger.dev dev` worker reads the project's `.env` (the
+    CLI has no `dev` target for `env set`, and the `syncEnvVars` build extension
+    returns early for dev builds), while a deployed worker reads the Trigger
+    environment. The Gemini key is stored as `GOOGLE_AI_API_KEY`, so
+    `trigger/keys.ts` reads that name first and keeps `GEMINI_AI_API_KEY` /
+    `GEMINI_API_KEY` as fallbacks; the previous GEMINI-only lookup failed every
+    design run even though the key was present.
+  - Gemini models: Google retired `gemini-2.5-flash` for new API keys, and the
+    recommended replacement `gemini-3.8-flash` answers `503` or stalls under
+    load, which failed the whole run. `trigger/gemini.ts` now owns the model
+    list (`gemini-3.8-flash` → `3.7` → `3.6` → `3.5`), bounds each attempt at
+    45s, disables the SDK's own retries, and falls back only for availability
+    failures (404/408/429/5xx, retirement messages, timeouts); a prompt or key
+    error still fails fast. Both tasks call `generateGeminiText`, so a retired
+    or saturated model no longer breaks design or spec generation.
   - Checks: `npx tsc --noEmit`, targeted `npx eslint` and
     `NODE_ENV=production npm run build`.
 
@@ -778,7 +794,7 @@ change.
     dialog. The static demo card was removed.
   - `hooks/use-project-specs.ts` fetches the spec metadata for the project when
     the tab mounts, validates every entry before rendering, and exposes
-    `specs` / `hasLoaded` / `isLoading` / `error` / `reload`. Switching tabs
+    `specs` / `hasLoaded` / `error` / `reload`. Switching tabs
     remounts the tab and refetches; nothing is cached globally.
   - `components/editor/spec-list.tsx` is the compact, `ScrollArea`-backed list:
     each row shows the filename and `createdAt`, the row body opens the
@@ -832,14 +848,18 @@ change.
 
 ## Open Questions
 
-- Feature 29 said to reuse an existing spec API and add no backend logic, but
-  only the download route existed — there was no way to list a project's specs.
-  A metadata-only `GET /api/projects/[projectId]/specs` route was added; confirm
-  that is the intended home for the listing rather than a server component
-  prop.
+- None.
 
 ## Architecture Decisions
 
+- Read-only, tab-scoped lists are served by access-checked `/api` routes rather
+  than server component props. A tab then refetches after a mutation through
+  its own hook (`reload()`) without a route refresh, and only pays for data the
+  user actually opens. The spec listing
+  (`GET /api/projects/[projectId]/specs`) follows this: it repeats the page's
+  `authorizeProjectAccess` check, which is accepted as the cost of keeping the
+  refresh local. Feature 29's "no backend logic" limit was narrowed to that
+  single metadata route for this reason.
 - Spec content lives in Vercel Blob and only its private URL plus project
   linkage live in `ProjectSpec`, matching the canvas split: Blob for the
   artifact, Postgres for metadata and ownership.
