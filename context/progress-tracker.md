@@ -1532,7 +1532,39 @@ change.
   - Montserrat replaced Geist project-wide for a single typeface: loaded as
     `--font-montserrat` in `app/layout.tsx`, mapped to both `--font-sans` and
     `--font-mono`, and used by `lib/clerk-appearance.ts`.
-- Latest change (auth layout + typography):
+- Latest change (AI chat send button placement):
+  - In the AI sidebar composer (`components/editor/ai-sidebar.tsx`) the send
+    button no longer sits in its own column beside the textarea. The composer
+    wrapper is now `relative`, the textarea spans the full width with
+    `pr-14 pb-12`, and the button is absolutely positioned at `right-2 bottom-2`
+    so it floats over the input's bottom-right corner like the reference.
+  - The composer textarea also hides its own scrollbar
+    (`[scrollbar-width:none] [&::-webkit-scrollbar]:hidden`) so long drafts
+    scroll without a visible track; the message list keeps its scrollbar.
+  - `npx tsc --noEmit` and `npx eslint` on the changed file pass.
+- Previous change (AI chat double slide + duplicate feed):
+  - Opening the AI sidebar slid in twice and logged `Console LiveblocksError:
+    Feed ai-chat already exists`. Two causes in
+    `components/editor/ai-sidebar.tsx`:
+    - `RoomChatSession` created the feed on mount, before `useFeeds()` had
+      loaded, so it re-created a feed that already existed. It now waits until
+      the feed list resolves and keeps one request in flight (ref guard).
+    - `isFeedAlreadyExistsError` only checked `status === 409`, but the room
+      socket rejects with a `LiveblocksError` carrying
+      `context.code === "FEED_ALREADY_EXISTS"` (no `status`), so the conflict
+      was logged as a real failure. The helper now accepts either, in this
+      file and in `lib/ai-status.ts`.
+    - The second slide was a remount: both provider chains changed element
+      type once the feed was found (`RoomChatContext.Provider` ->
+      `RoomChatFeedReader`, same for the AI status pair), which restarted
+      `AnimatePresence`/`motion.aside`. The providers now always render their
+      `Provider`, and the feed readers are rendered beside the sidebar and
+      report their data up through `onChange`.
+  - `useSelf` moved from `@liveblocks/react/suspense` to `@liveblocks/react`
+    so the sidebar has no suspense dependency that can remount it.
+  - `npx tsc --noEmit` passes; `npx eslint` on both changed files reports no
+    new problems (the pre-existing `lib/motion-tokens.ts` error remains).
+- Previous change (auth layout + typography):
   - `components/auth/auth-layout.tsx` rebuilt as a 50/50 split: teal-tinted
     left panel with the Shadowmesh brand mark, headline, description, three
     icon-chip feature rows (`SparklesIcon`, `UsersIcon`, `FileTextIcon`) and a

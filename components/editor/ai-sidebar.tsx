@@ -5,8 +5,8 @@ import {
   useCreateFeedMessage,
   useFeedMessages,
   useFeeds,
+  useSelf,
 } from "@liveblocks/react";
-import { useSelf } from "@liveblocks/react/suspense";
 import { useRealtimeRun } from "@trigger.dev/react-hooks";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
@@ -102,13 +102,21 @@ const chatTimeFormatter = new Intl.DateTimeFormat("en-US", {
   minute: "2-digit",
 });
 
-/** Liveblocks answers with a conflict when a feed already exists. */
+/**
+ * Liveblocks reports an existing feed as `FEED_ALREADY_EXISTS` on the room
+ * socket; the REST clients use a 409 status for the same conflict.
+ */
 function isFeedAlreadyExistsError(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    (error as { status?: unknown }).status === 409
-  );
+  if (typeof error !== "object" || error === null) {
+    return false;
+  }
+
+  const { status, context } = error as {
+    status?: unknown;
+    context?: { code?: unknown };
+  };
+
+  return status === 409 || context?.code === "FEED_ALREADY_EXISTS";
 }
 
 /** Run statuses that mean the realtime subscription has nothing left to send. */
@@ -301,33 +309,40 @@ function AiStatusSubscriber({ children }: { children: ReactNode }) {
   const feedsResult = useFeeds();
   const feeds = ("feeds" in feedsResult ? feedsResult.feeds : undefined) ?? [];
   const hasStatusFeed = feeds.some((feed) => feed.feedId === AI_STATUS_FEED_ID);
+  const [snapshot, setSnapshot] = useState<AiStatusSnapshot | null>(null);
 
-  if (!hasStatusFeed) {
-    return (
-      <AiStatusContext.Provider value={null}>
-        {children}
-      </AiStatusContext.Provider>
-    );
-  }
-
-  return <AiStatusFeedReader>{children}</AiStatusFeedReader>;
+  // The provider keeps its place in the tree while the feed loads, so the
+  // feed appearing never remounts the sidebar and replays its animation.
+  return (
+    <AiStatusContext.Provider value={hasStatusFeed ? snapshot : null}>
+      {children}
+      {hasStatusFeed ? <AiStatusFeedReader onChange={setSnapshot} /> : null}
+    </AiStatusContext.Provider>
+  );
 }
 
-function AiStatusFeedReader({ children }: { children: ReactNode }) {
-  // Only the latest message is rendered; history stays in the feed itself.
+function AiStatusFeedReader({
+  onChange,
+}: {
+  onChange: (snapshot: AiStatusSnapshot | null) => void;
+}) {
+  // Only the latest message is read; history stays in the feed itself.
   const messagesResult = useFeedMessages(AI_STATUS_FEED_ID);
   const messages =
     ("messages" in messagesResult ? messagesResult.messages : undefined) ?? [];
   const latest = messages.at(-1);
-  const status = parseAiStatusFeedPayload(latest?.data);
-  const snapshot: AiStatusSnapshot | null =
-    status && latest ? { ...status, at: latest.createdAt } : null;
 
-  return (
-    <AiStatusContext.Provider value={snapshot}>
-      {children}
-    </AiStatusContext.Provider>
-  );
+  const snapshot = useMemo<AiStatusSnapshot | null>(() => {
+    const status = parseAiStatusFeedPayload(latest?.data);
+
+    return status && latest ? { ...status, at: latest.createdAt } : null;
+  }, [latest]);
+
+  useEffect(() => {
+    onChange(snapshot);
+  }, [onChange, snapshot]);
+
+  return null;
 }
 
 function useAiStatus(): AiStatusSnapshot | null {
@@ -351,13 +366,15 @@ interface RoomChatValue {
 
 const NO_CHAT_MESSAGES: RoomChatMessage[] = [];
 
-const RoomChatContext = createContext<RoomChatValue>({
+const EMPTY_ROOM_CHAT: RoomChatValue = {
   messages: NO_CHAT_MESSAGES,
   viewerName: "",
   sendMessage: async () => {},
   sendAssistantMessage: async () => {},
   isChatUnavailable: false,
-});
+};
+
+const RoomChatContext = createContext<RoomChatValue>(EMPTY_ROOM_CHAT);
 
 function useRoomChat(): RoomChatValue {
   return useContext(RoomChatContext);
@@ -378,15 +395,7 @@ function RoomChatProvider({
 }) {
   if (!enabled) {
     return (
-      <RoomChatContext.Provider
-        value={{
-          messages: NO_CHAT_MESSAGES,
-          viewerName: "",
-          sendMessage: async () => {},
-          sendAssistantMessage: async () => {},
-          isChatUnavailable: false,
-        }}
-      >
+      <RoomChatContext.Provider value={EMPTY_ROOM_CHAT}>
         {children}
       </RoomChatContext.Provider>
     );
@@ -404,18 +413,28 @@ function RoomChatSession({ children }: { children: ReactNode }) {
   const hasChatFeed = feeds.some((feed) => feed.feedId === AI_CHAT_FEED_ID);
   const isChatUnavailable = "error" in feedsResult;
   const viewerName = self?.info.name.trim() || "Collaborator";
+  const [messages, setMessages] = useState<RoomChatMessage[]>(NO_CHAT_MESSAGES);
+  const feedRequestRef = useRef<Promise<void> | null>(null);
+  const hasLoadedFeeds = "feeds" in feedsResult;
 
+  // The feed list starts empty while it loads, so creating on mount asks for a
+  // feed that already exists. Wait for the list, and keep a single request in
+  // flight: the effect can run twice before the list reflects the new feed.
   useEffect(() => {
-    if (hasChatFeed) {
+    if (!hasLoadedFeeds || hasChatFeed || feedRequestRef.current) {
       return;
     }
 
-    createFeed(AI_CHAT_FEED_ID).catch((error: unknown) => {
-      if (!isFeedAlreadyExistsError(error)) {
-        console.error("Unable to create the room chat feed.", error);
-      }
-    });
-  }, [createFeed, hasChatFeed]);
+    feedRequestRef.current = createFeed(AI_CHAT_FEED_ID)
+      .catch((error: unknown) => {
+        if (!isFeedAlreadyExistsError(error)) {
+          console.error("Unable to create the room chat feed.", error);
+        }
+      })
+      .finally(() => {
+        feedRequestRef.current = null;
+      });
+  }, [createFeed, hasChatFeed, hasLoadedFeeds]);
 
   const postMessage = useCallback(
     async (content: string, sender: string, role: AiChatMessage["role"]) => {
@@ -449,46 +468,31 @@ function RoomChatSession({ children }: { children: ReactNode }) {
     [postMessage],
   );
 
-  if (!hasChatFeed) {
-    return (
-      <RoomChatContext.Provider
-        value={{
-          messages: NO_CHAT_MESSAGES,
-          viewerName,
-          sendMessage,
-          sendAssistantMessage,
-          isChatUnavailable,
-        }}
-      >
-        {children}
-      </RoomChatContext.Provider>
-    );
-  }
-
   return (
-    <RoomChatFeedReader
-      sendMessage={sendMessage}
-      sendAssistantMessage={sendAssistantMessage}
-      viewerName={viewerName}
-      isChatUnavailable={isChatUnavailable}
+    <RoomChatContext.Provider
+      value={{
+        messages,
+        viewerName,
+        sendMessage,
+        sendAssistantMessage,
+        isChatUnavailable,
+      }}
     >
       {children}
-    </RoomChatFeedReader>
+      {hasChatFeed ? <RoomChatFeedReader onChange={setMessages} /> : null}
+    </RoomChatContext.Provider>
   );
 }
 
+/**
+ * Reads the room chat and publishes it upward. It renders beside the sidebar
+ * rather than around it, so the feed resolving never remounts the sidebar (and
+ * restarts its slide-in animation).
+ */
 function RoomChatFeedReader({
-  sendMessage,
-  sendAssistantMessage,
-  viewerName,
-  isChatUnavailable,
-  children,
+  onChange,
 }: {
-  sendMessage: (content: string) => Promise<void>;
-  sendAssistantMessage: (content: string) => Promise<void>;
-  viewerName: string;
-  isChatUnavailable: boolean;
-  children: ReactNode;
+  onChange: (messages: RoomChatMessage[]) => void;
 }) {
   const messagesResult = useFeedMessages(AI_CHAT_FEED_ID);
 
@@ -506,19 +510,11 @@ function RoomChatFeedReader({
       .sort((a, b) => a.timestamp - b.timestamp);
   }, [messagesResult]);
 
-  return (
-    <RoomChatContext.Provider
-      value={{
-        messages: chatMessages,
-        viewerName,
-        sendMessage,
-        sendAssistantMessage,
-        isChatUnavailable,
-      }}
-    >
-      {children}
-    </RoomChatContext.Provider>
-  );
+  useEffect(() => {
+    onChange(chatMessages);
+  }, [chatMessages, onChange]);
+
+  return null;
 }
 
 /**
@@ -1136,7 +1132,7 @@ function AiSidebarView({
                     {sendError}
                   </p>
                 ) : null}
-                <div className="flex items-end gap-2">
+                <div className="relative">
                   <Textarea
                     ref={textareaRef}
                     value={message}
@@ -1155,7 +1151,7 @@ function AiSidebarView({
                         ? "AI is working on the canvas…"
                         : "Describe your architecture…"
                     }
-                    className="max-h-40 min-h-[72px] min-w-0 flex-1 resize-none overflow-y-auto py-2.5"
+                    className="max-h-40 min-h-[72px] w-full resize-none overflow-y-auto py-2.5 pr-14 pb-12 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                   />
                   <Button
                     type="submit"
@@ -1163,7 +1159,7 @@ function AiSidebarView({
                     aria-label={isBusy ? "AI is working" : "Send message"}
                     aria-busy={isBusy}
                     disabled={!message.trim() || isBusy}
-                    className="bg-success text-primary-foreground hover:bg-success/90"
+                    className="absolute right-2 bottom-2 bg-success text-primary-foreground hover:bg-success/90"
                   >
                     {isBusy ? (
                       <span

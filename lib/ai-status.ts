@@ -6,15 +6,21 @@ export const AI_USER_ID = "shadowmesh-ai";
 export const AI_USER_NAME = "Shadowmesh AI";
 export const AI_CURSOR_COLOR = "#6457f9";
 
-/** Liveblocks answers with a conflict when the feed already exists. */
-const FEED_ALREADY_EXISTS_STATUS = 409;
-
+/**
+ * Liveblocks reports an existing feed as `FEED_ALREADY_EXISTS` on the room
+ * socket; the REST clients use a 409 status for the same conflict.
+ */
 function isFeedAlreadyExistsError(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    (error as { status?: unknown }).status === FEED_ALREADY_EXISTS_STATUS
-  );
+  if (typeof error !== "object" || error === null) {
+    return false;
+  }
+
+  const { status, context } = error as {
+    status?: unknown;
+    context?: { code?: unknown };
+  };
+
+  return status === 409 || context?.code === "FEED_ALREADY_EXISTS";
 }
 
 /**
