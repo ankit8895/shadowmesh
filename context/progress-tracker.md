@@ -832,14 +832,18 @@ change.
 
 ## Open Questions
 
-- Feature 29 said to reuse an existing spec API and add no backend logic, but
-  only the download route existed — there was no way to list a project's specs.
-  A metadata-only `GET /api/projects/[projectId]/specs` route was added; confirm
-  that is the intended home for the listing rather than a server component
-  prop.
+- None.
 
 ## Architecture Decisions
 
+- Read-only, tab-scoped lists are served by access-checked `/api` routes rather
+  than server component props. A tab then refetches after a mutation through
+  its own hook (`reload()`) without a route refresh, and only pays for data the
+  user actually opens. The spec listing
+  (`GET /api/projects/[projectId]/specs`) follows this: it repeats the page's
+  `authorizeProjectAccess` check, which is accepted as the cost of keeping the
+  refresh local. Feature 29's "no backend logic" limit was narrowed to that
+  single metadata route for this reason.
 - Spec content lives in Vercel Blob and only its private URL plus project
   linkage live in `ProjectSpec`, matching the canvas split: Blob for the
   artifact, Postgres for metadata and ownership.

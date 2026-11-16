@@ -34,7 +34,9 @@ Integrate spec generation results into the editor so users can view, preview, an
 
 ### Scope Limits
 
-- do not implement backend logic
+- do not implement backend logic beyond the metadata-only listing route
+  (`GET /api/projects/[projectId]/specs`), which exists because the tab needs a
+  list and only the download route predated this feature
 - do not fetch Blob URLs directly in the client
 - do not store spec content in frontend state long-term
 - do not redesign the sidebar or tabs
