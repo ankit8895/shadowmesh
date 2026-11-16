@@ -36,7 +36,8 @@ Implement the full AI design agent so a user prompt results in real-time updates
 
 ## Dependencies
 
-All packages are already installed.`GEMINI_API_KEY` is already in `.env.local`.
+All packages are already installed. The Gemini key is stored as `GOOGLE_AI_API_KEY` in
+`.env` (the task also accepts `GEMINI_AI_API_KEY` / `GEMINI_API_KEY`).
 
 ## Scope Limits
 
